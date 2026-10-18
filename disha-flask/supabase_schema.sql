@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS reports (
     participants  INTEGER DEFAULT 0,
     by            TEXT,
     status        TEXT NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Queried')),
-    desc          TEXT,
+    "desc"        TEXT,
     remarks       TEXT,
     attachments   JSONB DEFAULT '[]'::jsonb,
     date          TEXT,
@@ -29,7 +29,7 @@ CREATE POLICY "Allow authenticated insert" ON reports
     FOR INSERT WITH CHECK (true);
 
 -- Insert demo data
-INSERT INTO reports (id, office, activity, rtype, period, participants, by, date, status, desc, attachments) VALUES
+INSERT INTO reports (id, office, activity, rtype, period, participants, by, date, status, "desc", attachments) VALUES
 (47, 'Kolkata North',   'Community Meeting (incl. Women''s & Youth)', 'daily',   '21 Sep 2026', 62,  'Raju Das',    '20 Sep', 'Pending',  'Community meeting at Palta Ghat with 62 members including women''s and youth groups.', '[]'),
 (46, 'Diamond Harbour', 'Training Programme',                         'daily',   '19 Sep 2026', 45,  'Mita Mondal', '19 Sep', 'Approved', 'Three-day training on sustainable fishing practices. 45 fishermen attended. Certificates issued.', '[]'),
 (45, 'Basirhat',        'Legal Clinic & Counselling',                 'quarter', 'Q3 2026',     18,  'Suresh Biswas','18 Sep','Queried',  'Quarterly legal clinic for 18 fishermen. Query raised regarding supporting affidavits.', '[]'),

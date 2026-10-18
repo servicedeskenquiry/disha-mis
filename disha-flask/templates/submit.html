@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title_suffix %} – Submit Report{% endblock %}
+{% block topbar_title %}<span id="sub-heading">Submit Report</span>{% endblock %}
+
+{% block content %}
+<div class="page-sub" id="sub-sub">Select report type and fill in the details</div>
+
+<!-- STEP 1: Choose report type -->
+<div id="step1">
+  <div class="steps">
+    <div class="step active"><div class="step-dot">1</div><span id="stp1">Choose Type</span></div>
+    <div class="step-line"></div>
+    <div class="step"><div class="step-dot">2</div><span id="stp2">Fill Details</span></div>
+    <div class="step-line"></div>
+    <div class="step"><div class="step-dot">3</div><span id="stp3">Attachments</span></div>
+    <div class="step-line"></div>
+    <div class="step"><div class="step-dot">4</div><span id="stp4">Submit</span></div>
+  </div>
+  <div class="rtype-grid">
+    <div class="rtype-card" onclick="selectType('daily', this)">
+      <div class="rtype-icon">📋</div>
+      <div class="rtype-title" id="rt-daily-title">Daily Activity Report</div>
+      <div class="rtype-desc" id="rt-daily-desc">Day-to-day field activities, meetings and community work</div>
+    </div>
+    <div class="rtype-card" onclick="selectType('quarter', this)">
+      <div class="rtype-icon">📊</div>
+      <div class="rtype-title" id="rt-quarter-title">Quarter Report</div>
+      <div class="rtype-desc" id="rt-quarter-desc">Quarterly summary of activities and outcomes</div>
+    </div>
+    <div class="rtype-card" onclick="selectType('annual', this)">
+      <div class="rtype-icon">📈</div>
+      <div class="rtype-title" id="rt-annual-title">Annual Report</div>
+      <div class="rtype-desc" id="rt-annual-desc">Full year achievements, data and documentation</div>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 2: Fill form -->
+<div id="step2" style="display:none">
+  <div class="steps">
+    <div class="step done"><div class="step-dot">✓</div><span id="stp1b">Choose Type</span></div>
+    <div class="step-line done"></div>
+    <div class="step active"><div class="step-dot">2</div><span id="stp2b">Fill Details</span></div>
+    <div class="step-line"></div>
+    <div class="step"><div class="step-dot">3</div><span id="stp3b">Attachments</span></div>
+    <div class="step-line"></div>
+    <div class="step"><div class="step-dot">4</div><span id="stp4b">Submit</span></div>
+  </div>
+
+  <form method="POST" action="{{ url_for('submit') }}" enctype="multipart/form-data">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span id="form-type-icon" style="font-size:22px">📋</span>
+          <div>
+            <div style="font-size:14px;font-weight:600" id="form-type-label">Daily Activity Report</div>
+            <div style="font-size:12px;color:var(--muted)" id="f-req">Fill all required fields (*)</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary"
+          style="padding:6px 14px;font-size:12px" onclick="goBack()" id="f-changetype">← Change type</button>
+      </div>
+
+      <input type="hidden" name="rtype" id="rtype-input" value="daily">
+
+      <div class="sec-div" id="f-sec-details">📋 Report Details</div>
+      <div class="form-grid">
+        <div class="fg2">
+          <label id="fl-office">Office / Branch *</label>
+          <select name="office" id="f-office" required>
+            <option value="">-- Select --</option>
+            <option>Kolkata North</option>
+            <option>Diamond Harbour</option>
+            <option>Basirhat</option>
+            <option>Kakdwip</option>
+            <option>Canning</option>
+            <option>Sagar Island</option>
+          </select>
+        </div>
+        <div class="fg2" id="activity-group">
+          <label id="fl-activity">Activity Type *</label>
+          <select name="activity" id="f-activity">
+            <option value="">-- Select --</option>
+            <option>Community Meeting (incl. Women's &amp; Youth)</option>
+            <option>Block / District / State Conference</option>
+            <option>Training Programme</option>
+            <option>Campaign &amp; Awareness</option>
+            <option>Deputation &amp; Meeting with Govt. Officials</option>
+            <option>Letters to Authorities (incl. RTI)</option>
+            <option>Policy Intervention Document</option>
+            <option>Research &amp; Investigation (Survey / Field Visit)</option>
+            <option>Legal Clinic &amp; Counselling</option>
+            <option>Exposure Visit</option>
+          </select>
+        </div>
+        <div class="fg2">
+          <label id="fl-period">Period *</label>
+          <input type="text" name="period" id="f-period" value="{{ '' }}" required placeholder="21 Sep 2026 / Q3 2026 / Annual 2026">
+        </div>
+        <div class="fg2">
+          <label id="fl-loc">Location / Venue *</label>
+          <input type="text" name="location" id="f-loc" placeholder="Village, Block, District" required>
+        </div>
+        <div class="fg2">
+          <label id="fl-participants">No. of Participants</label>
+          <input type="number" name="participants" id="f-ben" placeholder="e.g. 45" min="0">
+        </div>
+        <div class="fg2">
+          <label id="fl-by">Submitted by</label>
+          <input type="text" name="by" id="f-by" placeholder="Field officer name"
+            value="{{ session.get('username', '') }}">
+        </div>
+        <div class="fg2 full">
+          <label id="fl-desc">Description *</label>
+          <textarea name="desc" id="f-desc" required
+            placeholder="Describe activity, outcomes and key observations..."></textarea>
+        </div>
+        <div class="fg2 full">
+          <label id="fl-remarks">Remarks</label>
+          <textarea name="remarks" id="f-remarks"
+            placeholder="Follow-up actions..." style="min-height:55px"></textarea>
+        </div>
+      </div>
+
+      <div class="sec-div" style="margin-top:14px" id="f-sec-attach">📎 Attachments</div>
+      <div class="upload-zone" id="upload-zone">
+        <input type="file" name="attachments" id="file-input" multiple
+          accept="image/*,.pdf,.doc,.docx" onchange="handleFiles(this.files)">
+        <div style="font-size:24px;margin-bottom:6px">📎</div>
+        <div style="font-weight:500;margin-bottom:2px" id="uz-title">Click to attach or drag &amp; drop</div>
+        <div style="font-size:11px;opacity:.7" id="uz-sub">JPG, PNG, PDF, DOC, DOCX</div>
+      </div>
+      <div class="fpg" id="file-previews"></div>
+
+      <div class="btn-group">
+        <button type="submit" class="btn btn-primary" id="f-submit-btn">📤 Submit for Approval</button>
+        <button type="button" class="btn btn-secondary"
+          onclick="showToast(T('draft_saved'))" id="f-draft-btn">💾 Save Draft</button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

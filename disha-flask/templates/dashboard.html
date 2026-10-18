@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title_suffix %} – Dashboard{% endblock %}
+{% block topbar_title %}<span id="d-heading">Dashboard</span>{% endblock %}
+
+{% block content %}
+<div class="page-sub" id="d-sub">Overview of DISHA MIS — September 2026</div>
+
+{% if session.get('mode') == 'guest' %}
+<div class="guest-banner">
+  <div>
+    <div style="font-size:13px;font-weight:600" id="gb-title">👁 You are in Guest Mode</div>
+    <div style="font-size:12px;opacity:.7;margin-top:2px" id="gb-sub">Log in to submit or manage reports.</div>
+  </div>
+  <a href="{{ url_for('login') }}" class="btn-login-now" id="gb-btn">Log In →</a>
+</div>
+{% else %}
+<div class="prog-banner">
+  <div>
+    <div style="font-size:13px;font-weight:600" id="pb-title">System development in progress</div>
+    <div style="font-size:11px;opacity:.65;margin-top:2px" id="pb-sub">More modules coming — 5–6 weeks to full delivery</div>
+    <div class="prog-bar-bg"><div class="prog-bar"></div></div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-size:26px;font-weight:700">30%</div>
+    <div style="font-size:11px;opacity:.6" id="pb-complete">Complete</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- STAT CARDS -->
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="stat-accent" style="background:#2d9e65"></div>
+    <div class="stat-label" id="st-total">Total Reports</div>
+    <div class="stat-value">{{ stats.total }}</div>
+    <div class="stat-sub" style="color:#1a7a4a" id="st-total-sub">↑ 12 this month</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-accent" style="background:#e67e00"></div>
+    <div class="stat-label" id="st-pend">Pending Approval</div>
+    <div class="stat-value">{{ stats.pending }}</div>
+    <div class="stat-sub" id="st-pend-sub">
+      {% if session.get('mode') == 'admin' %}
+        <span style="color:var(--amber)">⚠ Needs review</span>
+      {% else %}
+        <span style="color:var(--muted)">Login to review</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-accent" style="background:#2d9e65"></div>
+    <div class="stat-label" id="st-appr">Approved</div>
+    <div class="stat-value">{{ stats.approved }}</div>
+    <div class="stat-sub" style="color:#1a7a4a" id="st-appr-sub">80% approval rate</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-accent" style="background:#1a5fa8"></div>
+    <div class="stat-label" id="st-office">Active Offices</div>
+    <div class="stat-value">{{ stats.offices }}</div>
+    <div class="stat-sub" id="st-office-sub">Across districts</div>
+  </div>
+</div>
+
+<!-- CHARTS -->
+<div class="charts-row">
+  <div class="chart-card wide">
+    <div class="chart-title" id="ch-monthly">Monthly Reports <span>Jan–Sep 2026</span></div>
+    <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title" id="ch-status">Status Breakdown</div>
+    <div class="chart-wrap"><canvas id="pieChart"></canvas></div>
+  </div>
+</div>
+<div class="charts-row">
+  <div class="chart-card">
+    <div class="chart-title" id="ch-office">By Office</div>
+    <div class="chart-wrap"><canvas id="officeChart"></canvas></div>
+  </div>
+  <div class="chart-card wide">
+    <div class="chart-title" id="ch-activity">Activity Types <span id="ch-year">This year</span></div>
+    <div class="chart-wrap"><canvas id="actChart"></canvas></div>
+  </div>
+</div>
+
+<!-- RECENT SUBMISSIONS TABLE -->
+<div class="card">
+  <div class="card-title" id="ct-recent">Recent Submissions</div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th id="th-office">Office</th>
+        <th id="th-act">Activity</th>
+        <th id="th-type">Type</th>
+        <th id="th-status">Status</th>
+        <th id="th-date">Date</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in recent %}
+      <tr class="clickable" onclick="window.location='{{ url_for('report_detail', report_id=r.id) }}'">
+        <td><strong>#{{ r.id }}</strong></td>
+        <td>{{ r.office }}</td>
+        <td>{{ r.activity }}</td>
+        <td><span class="pill pill-{{ r.rtype }}">{{ r.rtype.capitalize() }}</span></td>
+        <td><span class="pill pill-{{ r.status.lower() }}">{{ r.status }}</span></td>
+        <td>{{ r.date }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

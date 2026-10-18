@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title_suffix %} – Report #{{ report.id }}{% endblock %}
+{% block topbar_title %}Report #{{ report.id }}{% endblock %}
+
+{% block content %}
+<a href="{{ url_for('reports') }}" class="btn btn-secondary"
+  style="padding:6px 14px;font-size:12px;margin-bottom:12px" id="rd-back">← Back to list</a>
+
+<div class="card">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div>
+      <div style="font-size:15px;font-weight:600">Report #{{ report.id }} — {{ report.activity }}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">{{ report.office }} · {{ report.period }}</div>
+    </div>
+    <span class="pill pill-{{ report.status.lower() }}">{{ report.status }}</span>
+  </div>
+
+  <div class="detail-meta">
+    <div class="meta-item">
+      <div class="meta-label">Office</div>
+      <div class="meta-value">{{ report.office }}</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">Type</div>
+      <div class="meta-value">{{ report.rtype.capitalize() }}</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">Period</div>
+      <div class="meta-value">{{ report.period }}</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">Participants</div>
+      <div class="meta-value">{{ report.participants or '—' }}</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">Submitted by</div>
+      <div class="meta-value">{{ report.by }}</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">Date</div>
+      <div class="meta-value">{{ report.date }}</div>
+    </div>
+  </div>
+
+  <div class="sec-div" id="dd-desc-label">Description</div>
+  <div style="font-size:13px;line-height:1.8;padding:4px 0 12px">{{ report.desc }}</div>
+
+  {% if report.attachments %}
+  <div class="sec-div" id="dd-attach-label">Attachments</div>
+  <div class="fpg">
+    {% for f in report.attachments %}
+    <div class="fp">
+      {% if f.type.startswith('image/') %}
+        <img src="{{ f.data }}" alt="{{ f.name }}">
+      {% else %}
+        <div class="ficon">{{ '📄' if 'pdf' in f.type else '📝' }}</div>
+      {% endif %}
+      <div class="fname">{{ f.name }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="sec-div" style="margin-top:12px" id="dd-approval-label">Approval Actions</div>
+  <div style="background:var(--amber-bg);border:1px solid #f0d080;border-radius:8px;padding:11px 15px;font-size:13px;color:var(--amber)" id="dd-approval-msg">
+    🔒 Approval workflow is under development — coming soon.
+  </div>
+</div>
+{% endblock %}

@@ -4,66 +4,68 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DISHA MIS – Login</title>
+<link rel="icon" href="{{ url_for('static', filename=C.LOGO_FILE) }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
 <div class="login-screen">
+  <a href="{{ url_for('home') }}" class="login-back" data-t>← All sections</a>
+  <div class="login-welcome" data-t>Welcome to the DISHA Fisheries MIS System</div>
   <div class="login-logo">
-    <div class="badge">DISHA MIS</div>
-    <h1 id="ll-title">Fisheries NGO<br>Management System</h1>
-    <p id="ll-sub">Empowering fishermen communities across West Bengal</p>
+    <img src="{{ url_for('static', filename=C.LOGO_FILE) }}" alt="DISHA logo" class="login-logo-img">
+    <div class="login-org" data-t>{{ C.ORG_NAME }}</div>
+    <h1 data-t>Fisheries Data Management System</h1>
   </div>
   <div class="login-card">
     <div class="lang-toggle-login">
-      <button class="ltl-btn" data-lang="en" onclick="setLang('en')">🇬🇧 English</button>
-      <button class="ltl-btn" data-lang="bn" onclick="setLang('bn')">🇮🇳 বাংলা</button>
+      <button class="ltl-btn" data-lang="en" onclick="setLang('en')">English</button>
+      <button class="ltl-btn" data-lang="bn" onclick="setLang('bn')">বাংলা</button>
     </div>
-    <h2 id="lc-title">Welcome to DISHA</h2>
-    <p id="lc-sub">Sign in to your account or continue as guest</p>
+    <h2 data-t>Sign in</h2>
+    <p data-t>Sign in to your account or continue as guest</p>
 
     {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        {% for msg in messages %}
-          <div class="alert-danger">{{ msg }}</div>
-        {% endfor %}
-      {% endif %}
+      {% for msg in messages %}
+        <div class="alert-danger">{{ msg }}</div>
+      {% endfor %}
     {% endwith %}
 
     <form method="POST" action="{{ url_for('login') }}">
       <div class="login-tabs">
-        <button type="button" class="login-tab active" id="lt-admin"
-          onclick="this.classList.add('active');document.getElementById('lt-bo').classList.remove('active');document.getElementById('tab-val').value='admin'">
-          Admin / Staff
-        </button>
-        <button type="button" class="login-tab" id="lt-bo"
-          onclick="this.classList.add('active');document.getElementById('lt-admin').classList.remove('active');document.getElementById('tab-val').value='backoffice'">
-          Back Office
-        </button>
+        <button type="button" class="login-tab active" onclick="pickTab(this)" data-t>Admin</button>
+        <button type="button" class="login-tab" onclick="pickTab(this)" data-t>Back Office</button>
       </div>
-      <input type="hidden" name="tab" id="tab-val" value="admin">
       <input type="hidden" name="action" value="login">
       <div class="fg">
-        <label id="ll-user">Username</label>
-        <input type="text" name="username" id="login-user" placeholder="admin" value="admin" autocomplete="username">
+        <label for="login-user" data-t>Username</label>
+        <input type="text" name="username" id="login-user" autocomplete="username" required>
       </div>
       <div class="fg">
-        <label id="ll-pass">Password</label>
-        <input type="password" name="password" id="login-pass" value="admin123" autocomplete="current-password">
+        <label for="login-pass" data-t>Password</label>
+        <input type="password" name="password" id="login-pass" autocomplete="current-password" required>
       </div>
-      <button type="submit" class="btn-login" id="ll-loginbtn">Log In →</button>
+      <button type="submit" class="btn-login" data-t>Log In →</button>
     </form>
 
     <form method="POST" action="{{ url_for('login') }}">
       <input type="hidden" name="action" value="guest">
-      <button type="submit" class="btn-guest" id="ll-guestbtn">👁 Continue as Guest (View Only)</button>
+      <button type="submit" class="btn-guest" data-t>👁 Continue as Guest (View Only)</button>
     </form>
 
+    {% if demo_active %}
     <div class="login-hint">
       Demo: admin / admin123 &nbsp;|&nbsp; staff / staff123<br>
-      <span style="color:#b87800">Guest mode: read-only, no submission</span>
+      <span style="color:#b87800" data-t>Demo logins stop working once you create users.</span>
     </div>
+    {% endif %}
   </div>
 </div>
+<script>
+function pickTab(el){document.querySelectorAll('.login-tab').forEach(b=>b.classList.toggle('active',b===el));}
+</script>
+<script src="{{ url_for('static', filename='js/i18n_bn.js') }}"></script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

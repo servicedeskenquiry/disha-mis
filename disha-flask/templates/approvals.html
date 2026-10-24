@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title_suffix %} – Approval Queue{% endblock %}
+{% block topbar_title %}<span data-t>Approval Queue</span>{% endblock %}
+
+{% block content %}
+<div class="page-sub">{{ reports|length }} <span data-t>reports waiting for approval</span></div>
+{% with hide=['status'] %}{% include '_filters.html' %}{% endwith %}
+
+{% for r in reports %}
+<div class="card queue-item">
+  <div class="form-head">
+    <div>
+      <a href="{{ url_for('report_detail', report_id=r.id) }}" class="queue-title">#{{ r.id }} — <span data-t>{{ r.activity }}</span></a>
+      <div class="queue-meta">
+        <span class="pill pill-{{ r.rtype }}" data-t>{{ C.REPORT_TYPE_SHORT[r.rtype] }}</span>
+        <span data-t>{{ r.district }}</span> · {{ r.period }} · {{ r.submitted_by }} · <span data-t>Submitted</span> {{ r.created_at|dt }}
+        {% if r.participants_total %} · {{ r.participants_total }} <span data-t>participants</span>{% endif %}
+      </div>
+      <div style="margin-top:4px">{% for t in r.tags %}<span class="tag" data-t>{{ t }}</span>{% endfor %}</div>
+    </div>
+  </div>
+  <div class="queue-desc">{{ r.description|truncate(260) }}</div>
+  {% if r.comments %}
+  <div class="comment"><div class="comment-meta"><strong>{{ r.comments[-1].by }}</strong> · {{ r.comments[-1].at|dt(true) }}</div>{{ r.comments[-1].text }}</div>
+  {% endif %}
+  <div class="queue-actions">
+    <form method="POST" action="{{ url_for('report_comment', report_id=r.id) }}" class="comment-form inline">
+      <input type="hidden" name="next" value="{{ request.full_path }}">
+      <input type="text" name="comment" placeholder="Comment / observation…" data-tp required>
+      <button type="submit" class="btn btn-secondary btn-sm" data-t>Add Comment</button>
+    </form>
+    {% if can_approve %}
+    <form method="POST" action="{{ url_for('report_status', report_id=r.id) }}">
+      <input type="hidden" name="next" value="{{ request.full_path }}">
+      <input type="hidden" name="status" value="Approved">
+      <button type="submit" class="btn btn-primary btn-sm" data-t>✅ Approve</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<div class="card empty" data-t>Nothing waiting for approval. 🎉</div>
+{% endfor %}
+{% endblock %}

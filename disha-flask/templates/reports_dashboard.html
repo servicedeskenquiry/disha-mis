@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title_suffix %} – Reports Dashboard{% endblock %}
+{% block topbar_title %}<span data-t>All Reports</span>{% endblock %}
+
+
+{% block content %}
+{% macro keep(skip) %}
+  {% for k, v in {'year': year, 'omonth': omonth or '', 'district': district, 'fy': fy, 'tag': filters.get('tag', '')}.items() if k not in skip and v %}
+    <input type="hidden" name="{{ k }}" value="{{ v }}">
+  {% endfor %}
+{% endmacro %}
+{% include '_reports_tabs.html' %}
+
+<form method="GET" class="inline-filter" style="margin-bottom:14px">
+  {{ keep(['tag']) }}
+  <label for="rd-tag" data-t>Issue Tag</label>
+  <select name="tag" id="rd-tag" onchange="this.form.submit()">
+    <option value="" data-t>All tags</option>
+    {% for t in C.ISSUE_TAGS %}<option value="{{ t }}" {% if filters.get('tag') == t %}selected{% endif %} data-t>{{ t }}</option>{% endfor %}
+  </select>
+</form>
+
+<!-- REPORT SUBMISSION OVERVIEW -->
+<div class="card">
+  <div class="card-title">
+    <span data-t>Report Submission Overview</span>
+    <form method="GET" class="inline-filter">
+      {{ keep(['year', 'omonth']) }}
+      <select name="year" onchange="this.form.submit()" aria-label="Year">
+        {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+      </select>
+      <select name="omonth" onchange="this.form.submit()" aria-label="Month">
+        <option value="" data-t>All months</option>
+        {% for m in range(1, 13) %}<option value="{{ m }}" {% if omonth == m %}selected{% endif %} data-t>{{ C.MONTHS[m-1] }}</option>{% endfor %}
+      </select>
+    </form>
+  </div>
+  <div class="mini-stats">
+    <div class="mini-stat"><b>{{ overview.total }}</b><span data-t>Reports submitted</span></div>
+    {% for t in C.REPORT_TYPES %}
+    <div class="mini-stat"><b>{{ overview.by_type[t.key] }}</b><span data-t>{{ t.label }}s</span></div>
+    {% endfor %}
+  </div>
+  <div class="chart-wrap tall"><canvas id="overviewChart"></canvas></div>
+  <div class="sub-caption">
+    <span data-t>{{ 'Reports submitted per day, by report type' if omonth else 'Reports submitted per month, by report type' }}</span>
+  </div>
+  <div class="act-strip">
+    {% for a, n in overview.by_activity %}
+    <div class="act-pill"><span data-t>{{ C.ACTIVITY_SHORT[a] }}</span> <b>{{ n }}</b></div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- DISTRICT-WISE PROGRESS -->
+<div class="card">
+  <div class="card-title">
+    <span data-t>District-wise Progress</span>
+    <form method="GET" class="inline-filter">
+      {{ keep(['district', 'fy']) }}
+      <select name="district" onchange="this.form.submit()" aria-label="District">
+        <option value="" data-t>All districts</option>
+        {% for d in C.PERIODIC_DISTRICTS %}<option value="{{ d }}" {% if district == d %}selected{% endif %} data-t>{{ d }}</option>{% endfor %}
+      </select>
+      <select name="fy" onchange="this.form.submit()" aria-label="Financial year">
+        {% for y in fys %}<option value="{{ y }}" {% if y == fy %}selected{% endif %}>{{ fy_label(y) }}</option>{% endfor %}
+      </select>
+    </form>
+  </div>
+  <div class="mini-stats">
+    <div class="mini-stat big"><b>{{ progress.total }}</b><span data-t>Total activities</span></div>
+    <div class="mini-stat"><b>{{ progress.participants }}</b><span data-t>Participants</span></div>
+    <div class="mini-stat"><b data-t>{{ district or 'All districts' }}</b><span>{{ progress.fy_label }}</span></div>
+  </div>
+  <div class="charts-row two">
+    <div class="chart-card flat">
+      <div class="chart-title" data-t>Month-wise Progress</div>
+      <div class="chart-wrap tall"><canvas id="progressChart"></canvas></div>
+    </div>
+    <div class="chart-card flat">
+      <div class="chart-title" data-t>Activity-wise Breakup</div>
+      <div class="chart-wrap tall"><canvas id="breakupChart"></canvas></div>
+    </div>
+  </div>
+  <div class="chart-card flat">
+    <div class="chart-title" data-t>Number of Activities by Activity Type</div>
+    <div class="chart-wrap"><canvas id="typeChart"></canvas></div>
+  </div>
+</div>
+
+<!-- DISTRICT × ACTIVITY TABLE -->
+<div class="card">
+  <div class="card-title"><span><span data-t>Activities by District and Activity Type</span> — {{ fy_label(fy) }}</span></div>
+  <div class="table-scroll">
+  <table class="matrix">
+    <thead><tr><th data-t>District</th>{% for a in C.ACTIVITY_NAMES %}<th class="tc" data-t>{{ C.ACTIVITY_SHORT[a] }}</th>{% endfor %}<th class="tc" data-t>Total</th></tr></thead>
+    <tbody>
+      {% for row in matrix.rows %}
+      <tr class="clickable {% if row.district == district %}selected{% endif %}" onclick="location='{{ url_for('reports_dashboard', district=row.district, fy=fy, year=year, tag=filters.get('tag', '')) }}'">
+        <td data-t>{{ row.district }}</td>
+        {% for n in row.counts %}<td class="tc">{{ n or '·' }}</td>{% endfor %}
+        <td class="tc"><strong>{{ row.total }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr><td data-t>Total</td>{% for n in matrix.totals %}<td class="tc">{{ n }}</td>{% endfor %}<td class="tc">{{ matrix.grand }}</td></tr></tfoot>
+  </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const OV = {{ overview|tojson }};
+const PR = {{ progress|tojson }};
+const TYPE_COLORS = {daily:'#1a5fa8', monthly:'#2d9e65', quarterly:'#7b2fa8', halfyearly:'#0e8a8a', annual:'#b87800'};
+onChartsReady(() => {
+  barChart('overviewChart', OV.labels,
+    OV.datasets.map(d => ({label: d.label, data: d.data, color: TYPE_COLORS[d.key]})),
+    {stacked: true, legend: true, totals: true});
+  barChart('progressChart', PR.labels,
+    PR.matrix.map((m, i) => ({label: m.activity, data: m.data, color: PALETTE[i % PALETTE.length]})),
+    {stacked: true, legend: true, totals: true, shortLegend: true});
+  doughnutChart('breakupChart', PR.by_activity.map(a => a[0]), PR.by_activity.map(a => a[1]), PALETTE, {percent: true});
+  barChart('typeChart', PR.by_activity.map(a => a[0]), [{label: 'Activities', data: PR.by_activity.map(a => a[1]), color: 'rgba(184,120,0,.75)'}], {horizontal: true});
+});
+</script>
+{% endblock %}

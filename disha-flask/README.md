@@ -1,116 +1,105 @@
 # DISHA MIS — Flask + Supabase
 
-DISHA Management Information System demo for fisheries NGO.  
-**30% complete** — shows working Login, Dashboard, Submit Report, View Reports.  
-Remaining 70% (Approval Queue, Analytics, Export, etc.) shown as locked modules.
+Management Information System for the **Society for Direct Initiative for Social and Health Action (DISHA)**.
+The Small-Scale Fisheries section ("Fisheries Data Management System") is live. The other four sections show as *Coming Soon*.
+
+This version includes the changes from the client's *Preliminary Review and Observation Note* (28.09.2026) and the remaining modules: Approval Queue, Reports Dashboard (analytics), Export and User Management.
 
 ---
 
-## Quick Start (local)
+## Quick start (local)
 
 ```bash
-# 1. Clone and enter
-git clone https://github.com/YOUR_ORG/disha-mis.git
-cd disha-mis
-
-# 2. Create virtual environment
 python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
-
-# 3. Install dependencies
+source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# 4. Configure environment
-cp .env.example .env
-# Edit .env and add your Supabase URL and key
-
-# 5. Run
+cp .env.example .env              # add Supabase URL/key, or leave empty for demo data
 flask run
 ```
 
-Open `http://localhost:5000`
+Open `http://localhost:5000`. Without Supabase the app runs on in-memory demo data (about 250 reports across the 15 districts, reset on restart).
+
+Demo logins `admin / admin123` (Super Admin) and `staff / staff123` (Back Office) work **only until the first user is created** under *User Management*. Create your own Super Admin first.
 
 ---
 
-## Demo credentials
+## Supabase setup
 
-| Username | Password  | Role        |
-|----------|-----------|-------------|
-| admin    | admin123  | Super Admin |
-| staff    | staff123  | Back Office |
+1. **SQL Editor** → run `supabase_schema.sql`. It creates `reports`, `app_users`, the RLS policies (including the UPDATE policy approvals need) and the public `attachments` storage bucket.
+   - If you ran the old v1 schema, uncomment the `DROP TABLE IF EXISTS reports;` line at the top first. The old table only held demo data.
+2. Optional: run `supabase_seed.sql` for demo reports.
+3. **Settings → API → Legacy API Keys** → copy the `anon` key (starts with `eyJ...`). `supabase==2.7.4` rejects the newer `sb_publishable_...` keys.
+4. Put `SUPABASE_URL` and `SUPABASE_KEY` in `.env` (local) or the Render environment.
+5. Check `https://your-app/health`. It should say `"backend": "supabase"`.
 
-Or click **"Continue as Guest"** for read-only access.
+Supabase errors are now shown on screen and logged, instead of silently falling back to demo data.
 
----
-
-## Supabase Setup
-
-1. Go to [supabase.com](https://supabase.com) → New Project
-2. Open **SQL Editor** → paste contents of `supabase_schema.sql` → Run
-3. Go to **Settings → API** → copy Project URL and anon/public key
-4. Paste into your `.env`:
-   ```
-   SUPABASE_URL=https://xxxx.supabase.co
-   SUPABASE_KEY=your-anon-key
-   ```
-
-> Without Supabase configured, the app runs with in-memory demo data (data resets on restart).
+Security note: the anon key is only used on the server, never sent to the browser. Anyone who has the key can still read the tables (including password hashes), so keep it secret and never commit `.env`.
 
 ---
 
 ## Deploy on Render
 
-1. Push this repo to GitHub
-2. Go to [render.com](https://render.com) → **New Web Service**
-3. Connect your GitHub repo
-4. Render will auto-detect `render.yaml`
-5. Add environment variables in Render dashboard:
-   - `SUPABASE_URL`
-   - `SUPABASE_KEY`
-6. Deploy 🚀
+`render.yaml` is unchanged. Add `SUPABASE_URL` and `SUPABASE_KEY` in the Render dashboard. Attachments go to Supabase Storage. Without Supabase they are saved to the local disk, which Render wipes on every deploy.
 
 ---
 
-## Project Structure
+## Where to change lists
 
-```
-disha-mis/
-├── app.py                  # Flask routes + Supabase integration
-├── requirements.txt
-├── render.yaml             # Render deployment config
-├── .env.example
-├── supabase_schema.sql     # Supabase table + demo data
-├── static/
-│   ├── css/style.css       # All styles
-│   └── js/main.js          # Charts, translations, file upload
-└── templates/
-    ├── base.html           # Sidebar, topbar, modal layout
-    ├── login.html          # Login screen
-    ├── dashboard.html      # Charts + stats
-    ├── submit.html         # 3-step report submission
-    ├── reports.html        # Report list with filters
-    └── report_detail.html  # Single report view
-```
+Everything the client may revise is in **`config.py`**:
+
+| Setting | What it is |
+|---|---|
+| `DISTRICTS`, `HEAD_OFFICE` | The 15 active districts/units. Head Office is offered for periodic reports only |
+| `REPORT_TYPES` | Daily Activity, Monthly, Quarterly, Half-Yearly, Annual |
+| `ACTIVITY_TYPES` | 5 activity types + Others, each with the format/template fields that open when it is chosen. **Provisional** until the Fisheries Team shares their formats |
+| `ISSUE_TAGS` | **Provisional** list until the Fisheries Team shares theirs |
+| `PARTICIPANT_CATEGORIES` | Women, Men, Fisher, Fish Workers, Fish Farmers, Leaders, Organisers, Experts, Others |
+| `QUARTERS`, `HALVES` | Indian financial year (Q1 = Apr–Jun, H1 = Apr–Sep) |
+| `MAX_ATTACHMENTS`, `MAX_FILE_MB` | 10 files per report, 25 MB each |
+| `LOGO_FILE` | Replace `static/img/disha-logo.svg` (a placeholder) with the official DISHA logo |
+
+Bengali text lives in `static/js/i18n_bn.js`, keyed by the English text. Add a line there for any new label.
 
 ---
 
-## Features
+## Project structure
 
-### Working (30%)
-- ✅ Login (Admin / Back Office / Guest modes)
-- ✅ Dashboard with 4 live charts (Chart.js)
-- ✅ Submit Report (Daily / Quarter / Annual) with file attachment
-- ✅ View Reports with type/status filters
-- ✅ Guest mode — blurred report list, locked submission
-- ✅ English ↔ বাংলা language toggle (persists in localStorage)
-- ✅ "30% Complete" progress banner
-- ✅ Supabase database integration (optional)
+```
+app.py               Routes
+config.py            Master lists (districts, report types, activities, tags …)
+store.py             Supabase / in-memory data access, file storage, users
+analytics.py         Filters and dashboard/analytics aggregations
+exports.py           Word, Excel, PowerPoint and PDF export
+demo_data.py         Demo reports
+supabase_schema.sql  Tables, RLS policies, storage bucket
+supabase_seed.sql    Optional demo data
+static/js/main.js    Language switch, charts (values printed on charts), submit form
+static/js/i18n_bn.js Bengali translations
+static/js/vendor/    Chart.js 4.4.1 + chartjs-plugin-datalabels 2.2.0 (bundled, no CDN)
+templates/
+  home.html              Welcome page: org name, logo, 5 sections, language switch
+  login.html             Fisheries login
+  dashboard.html         Primary dashboard
+  submit.html            Submit report (5 types)
+  reports.html           All Reports + type sub-sections + Monthly Due/Done tracker
+  reports_dashboard.html Submission overview, district-wise progress
+  report_detail.html     Report view, admin comments, approval
+  approvals.html         Approval Queue
+  export.html            Export page
+  users.html             User Management
+```
 
-### Coming Soon (70% — shown as locked)
-- 🔒 Approval Queue (Approve / Query / Reject)
-- 🔒 Analytics & detailed charts
-- 🔒 Export (Excel / PDF / Word)
-- 🔒 Issue Tags
-- 🔒 Case Studies
-- 🔒 Govt. Schemes
-- 🔒 User Profiles & role management
+## Roles
+
+| Role | Can do |
+|---|---|
+| Super Admin | Everything, including approving reports and managing users |
+| Back Office | Submit, view, comment, analytics, export |
+| Guest | Dashboard and a preview of approved reports (unchanged) |
+
+## Known limitations
+
+- PDF export uses standard fonts, so Bengali text typed into reports will not render in the PDF. Word, Excel and PowerPoint exports handle Bengali fine.
+- Report period labels (e.g. "September 2026") are stored in English and are not translated on screen.
+- "Save Draft" was removed because it did not save anything. It can be added properly later.

@@ -4,96 +4,89 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DISHA MIS{% block title_suffix %}{% endblock %}</title>
+<link rel="icon" href="{{ url_for('static', filename=C.LOGO_FILE) }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/vendor/chartjs-plugin-datalabels.min.js') }}"></script>
 </head>
 <body>
-
+{% set mode = session.get('mode', 'guest') %}
 <div class="app-shell">
   <!-- SIDEBAR -->
   <div class="sidebar">
-    <div class="sidebar-logo">
-      <span class="logo-badge">DISHA</span>
-      <div class="logo-title" id="s-title">Fisheries NGO MIS</div>
-      <div class="logo-sub" id="s-sub">Management Info System</div>
-    </div>
+    <a class="sidebar-logo" href="{{ url_for('home') }}">
+      <img src="{{ url_for('static', filename=C.LOGO_FILE) }}" alt="DISHA logo" class="sidebar-logo-img">
+      <div>
+        <div class="logo-title">DISHA</div>
+        <div class="logo-sub" data-t>Fisheries Data Management System</div>
+      </div>
+    </a>
     <div class="sidebar-nav">
-      {% set mode = session.get('mode', 'guest') %}
-      <div class="nav-section" id="sec-main">Main</div>
+      <div class="nav-section" data-t>Main</div>
       <a class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">
-        <span class="nav-icon">🏠</span><span id="nav-dashboard">Dashboard</span>
+        <span class="nav-icon">🏠</span><span data-t>Dashboard</span>
       </a>
       {% if mode == 'admin' %}
-        <div class="nav-section" id="sec-reports">Reports</div>
+        <div class="nav-section" data-t>Reports</div>
         <a class="nav-item {% if request.endpoint == 'submit' %}active{% endif %}" href="{{ url_for('submit') }}">
-          <span class="nav-icon">📝</span><span id="nav-submit">Submit Report</span>
+          <span class="nav-icon">📝</span><span data-t>Submit Report</span>
         </a>
-        <a class="nav-item {% if request.endpoint == 'reports' %}active{% endif %}" href="{{ url_for('reports') }}">
-          <span class="nav-icon">📋</span><span id="nav-reports">All Reports</span>
+        <a class="nav-item {% if request.endpoint in ('reports', 'report_detail', 'reports_dashboard') %}active{% endif %}" href="{{ url_for('reports_dashboard') }}">
+          <span class="nav-icon">📋</span><span data-t>All Reports</span>
         </a>
-        <div class="nav-section" id="sec-soon">Coming Soon</div>
-        <div class="nav-item locked" onclick="lock(T('lock_approval'))">
-          <span class="nav-icon">✅</span><span id="nav-approval">Approval Queue</span><span class="lock-icon">🔒</span>
+        <a class="nav-item {% if request.endpoint == 'approvals' %}active{% endif %}" href="{{ url_for('approvals') }}">
+          <span class="nav-icon">✅</span><span data-t>Approval Queue</span>
+        </a>
+        <a class="nav-item {% if request.endpoint == 'export_page' %}active{% endif %}" href="{{ url_for('export_page') }}">
+          <span class="nav-icon">📤</span><span data-t>Export</span>
+        </a>
+        <div class="nav-section" data-t>Coming Soon</div>
+        <div class="nav-item locked" onclick="lock('Upload, view and download case documents.')">
+          <span class="nav-icon">📌</span><span data-t>Case Studies</span><span class="lock-icon">🔒</span>
         </div>
-        <div class="nav-item locked" onclick="lock(T('lock_analytics'))">
-          <span class="nav-icon">📊</span><span id="nav-analytics">Analytics</span><span class="lock-icon">🔒</span>
+        <div class="nav-item locked" onclick="lock('Manage government scheme documents.')">
+          <span class="nav-icon">🏛️</span><span data-t>Govt. Schemes</span><span class="lock-icon">🔒</span>
         </div>
-        <div class="nav-item locked" onclick="lock(T('lock_export'))">
-          <span class="nav-icon">📤</span><span id="nav-export">Export</span><span class="lock-icon">🔒</span>
-        </div>
-        <div class="nav-item locked" onclick="lock(T('lock_tags'))">
-          <span class="nav-icon">🏷️</span><span id="nav-tags">Issue Tags</span><span class="lock-icon">🔒</span>
-        </div>
-        <div class="nav-item locked" onclick="lock(T('lock_cases'))">
-          <span class="nav-icon">📌</span><span id="nav-cases">Case Studies</span><span class="lock-icon">🔒</span>
-        </div>
-        <div class="nav-item locked" onclick="lock(T('lock_schemes'))">
-          <span class="nav-icon">🏛️</span><span id="nav-schemes">Govt. Schemes</span><span class="lock-icon">🔒</span>
-        </div>
-        <div class="nav-section" id="sec-admin">Admin</div>
-        <div class="nav-item locked" onclick="lock(T('lock_users'))">
-          <span class="nav-icon">👥</span><span id="nav-users">User Profiles</span><span class="lock-icon">🔒</span>
-        </div>
+        {% if can_manage_users %}
+        <div class="nav-section" data-t>Admin</div>
+        <a class="nav-item {% if request.endpoint == 'users' %}active{% endif %}" href="{{ url_for('users') }}">
+          <span class="nav-icon">👥</span><span data-t>User Management</span>
+        </a>
+        {% endif %}
       {% else %}
-        <div class="nav-section" id="sec-public">Public</div>
+        <div class="nav-section" data-t>Public</div>
         <a class="nav-item {% if request.endpoint == 'reports' %}active{% endif %}" href="{{ url_for('reports') }}">
-          <span class="nav-icon">📋</span><span id="nav-view-reports">View Reports</span>
+          <span class="nav-icon">📋</span><span data-t>View Reports</span>
         </a>
-        <div class="nav-section" id="sec-req-login">Requires Login</div>
-        <div class="nav-item locked" onclick="lock(T('lock_submit_guest'))">
-          <span class="nav-icon">📝</span><span id="nav-submit-guest">Submit Report</span><span class="lock-icon">🔒</span>
+        <div class="nav-section" data-t>Requires Login</div>
+        <div class="nav-item locked" onclick="lock('Log in to submit activity reports.')">
+          <span class="nav-icon">📝</span><span data-t>Submit Report</span><span class="lock-icon">🔒</span>
         </div>
-        <div class="nav-item locked" onclick="lock(T('lock_approval_guest'))">
-          <span class="nav-icon">✅</span><span>Approval Queue</span><span class="lock-icon">🔒</span>
+        <div class="nav-item locked" onclick="lock('Log in to manage approvals.')">
+          <span class="nav-icon">✅</span><span data-t>Approval Queue</span><span class="lock-icon">🔒</span>
         </div>
-        <div class="nav-item locked" onclick="lock(T('lock_analytics_guest'))">
-          <span class="nav-icon">📊</span><span>Analytics</span><span class="lock-icon">🔒</span>
+        <div class="nav-item locked" onclick="lock('Log in to view detailed analytics.')">
+          <span class="nav-icon">📊</span><span data-t>Reports Dashboard</span><span class="lock-icon">🔒</span>
         </div>
-        <div class="nav-item locked" onclick="lock(T('lock_export_guest'))">
-          <span class="nav-icon">📤</span><span>Export</span><span class="lock-icon">🔒</span>
-        </div>
-        <div class="nav-item locked" onclick="lock(T('lock_cases_guest'))">
-          <span class="nav-icon">📌</span><span>Case Studies</span><span class="lock-icon">🔒</span>
-        </div>
-        <div class="nav-item locked" onclick="lock(T('lock_schemes_guest'))">
-          <span class="nav-icon">🏛️</span><span>Govt. Schemes</span><span class="lock-icon">🔒</span>
+        <div class="nav-item locked" onclick="lock('Log in to export reports.')">
+          <span class="nav-icon">📤</span><span data-t>Export</span><span class="lock-icon">🔒</span>
         </div>
       {% endif %}
     </div>
     <div class="sidebar-user">
       <div class="user-row">
-        <div class="user-avatar {{ 'avatar-admin' if session.get('mode') == 'admin' else 'avatar-guest' }}">
-          {{ session.get('username', 'G')[:2].upper() }}
+        <div class="user-avatar {{ 'avatar-admin' if mode == 'admin' else 'avatar-guest' }}">
+          {{ session.get('display_name', 'G')[:2].upper() }}
         </div>
         <div>
-          <div class="user-name">{{ session.get('username', 'Guest') }}</div>
-          <div class="user-role">{{ session.get('role', 'View Only') }}</div>
+          <div class="user-name">{{ session.get('display_name', 'Guest') }}</div>
+          <div class="user-role" data-t>{{ session.get('role', 'View Only') }}</div>
         </div>
       </div>
-      <div class="mode-badge {{ 'mode-admin' if session.get('mode') == 'admin' else 'mode-guest' }}" id="mode-badge">
-        {{ '🟢 Admin Mode' if session.get('mode') == 'admin' else '👁 Guest Mode' }}
-      </div>
-      <a href="{{ url_for('logout') }}" class="btn-logout" id="s-logout">⬅ Logout</a>
+      <div class="mode-badge {{ 'mode-admin' if mode == 'admin' else 'mode-guest' }}" data-t>{{ '🟢 Admin Mode' if mode == 'admin' else '👁 Guest Mode' }}</div>
+      <a href="{{ url_for('logout') }}" class="btn-logout" data-t>⬅ Logout</a>
     </div>
   </div>
 
@@ -102,32 +95,24 @@
     <div class="topbar">
       <div class="topbar-left">
         <div class="topbar-title">{% block topbar_title %}{% endblock %}</div>
-        {% if session.get('mode') == 'admin' %}
-          <div class="wip-pill">30% Complete</div>
-        {% else %}
-          <div class="guest-pill">👁 Guest Mode</div>
-        {% endif %}
+        {% if mode != 'admin' %}<div class="guest-pill" data-t>👁 Guest Mode</div>{% endif %}
       </div>
       <div class="topbar-right">
         <div class="lang-switch">
-          <button class="lang-btn" data-lang="en" onclick="setLang('en')">EN</button>
-          <button class="lang-btn" data-lang="bn" onclick="setLang('bn')">বাং</button>
+          <button class="lang-btn" data-lang="en" onclick="setLang('en')">English</button>
+          <button class="lang-btn" data-lang="bn" onclick="setLang('bn')">বাংলা</button>
         </div>
-        {% if session.get('mode') == 'admin' %}
-          <a href="{{ url_for('logout') }}" class="btn-sw btn-sw-guest">👁 Switch to Guest</a>
-        {% else %}
-          <a href="{{ url_for('login') }}" class="btn-sw btn-sw-admin">🔑 Log In as Admin</a>
+        {% if mode != 'admin' %}
+          <a href="{{ url_for('login') }}" class="btn-sw btn-sw-admin" data-t>🔑 Log In as Admin</a>
         {% endif %}
       </div>
     </div>
 
     <div class="content">
-      {% with messages = get_flashed_messages() %}
-        {% if messages %}
-          {% for msg in messages %}
-            <div class="flash-success">✅ {{ msg }}</div>
-          {% endfor %}
-        {% endif %}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+          <div class="{{ 'flash-error' if cat == 'error' else 'flash-success' }}">{{ '⚠' if cat == 'error' else '✅' }} {{ msg }}</div>
+        {% endfor %}
       {% endwith %}
 
       {% block content %}{% endblock %}
@@ -139,16 +124,15 @@
 <div class="modal-bg" id="modal" onclick="if(event.target===this)closeModal()">
   <div class="modal-box">
     <div class="modal-icon">🔒</div>
-    <div class="modal-title" id="m-title">Under Development</div>
+    <div class="modal-title" data-t>Coming Soon</div>
     <div class="modal-desc" id="modal-msg"></div>
-    <div class="modal-eta" id="m-eta">⏱ Available in 5–6 weeks</div>
-    <button class="modal-close" id="m-close" onclick="closeModal()">Close</button>
+    <button class="modal-close" onclick="closeModal()" data-t>Close</button>
   </div>
 </div>
 
-<!-- TOAST -->
 <div class="toast" id="toast">✅ <span id="toast-msg"></span></div>
 
+<script src="{{ url_for('static', filename='js/i18n_bn.js') }}"></script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 {% block extra_js %}{% endblock %}
 </body>

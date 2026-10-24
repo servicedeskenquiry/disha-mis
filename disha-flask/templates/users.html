@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title_suffix %} – User Management{% endblock %}
+{% block topbar_title %}<span data-t>User Management</span>{% endblock %}
+
+{% block content %}
+{% if demo_active %}
+<div class="flash-warn">
+  ⚠ <span data-t>The demo logins (admin / staff) are active because no users exist yet. Create a Super Admin account for yourself first: once any user exists, the demo logins stop working.</span>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-title" data-t>Add User</div>
+  <form method="POST" class="form-grid three">
+    <div class="fg2"><label data-t>Username</label><input name="username" required pattern="[A-Za-z0-9._]+" autocomplete="off"></div>
+    <div class="fg2"><label data-t>Full Name</label><input name="full_name"></div>
+    <div class="fg2"><label data-t>Password</label><input type="password" name="password" minlength="8" required autocomplete="new-password"></div>
+    <div class="fg2"><label data-t>Role</label>
+      <select name="role">{% for r in C.ROLES %}<option value="{{ r }}" data-t>{{ r }}</option>{% endfor %}</select>
+    </div>
+    <div class="fg2"><label data-t>Active District</label>
+      <select name="district"><option value="" data-t>All districts</option>{% for d in C.PERIODIC_DISTRICTS %}<option value="{{ d }}" data-t>{{ d }}</option>{% endfor %}</select>
+    </div>
+    <div class="fg2" style="justify-content:flex-end"><button class="btn btn-primary" type="submit" data-t>Create User</button></div>
+  </form>
+  <div class="hint" data-t>Super Admin: approve reports and manage users. Back Office: submit, view, comment and export.</div>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden">
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th data-t>Username</th><th data-t>Full Name</th><th data-t>Role</th><th data-t>Active District</th><th data-t>Status</th><th data-t>Reset Password</th></tr></thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td><strong>{{ u.username }}</strong></td>
+        <td>{{ u.full_name }}</td>
+        <td>
+          <form method="POST" action="{{ url_for('user_update', username=u.username) }}">
+            <select name="role" onchange="this.form.submit()">{% for r in C.ROLES %}<option value="{{ r }}" {% if u.role == r %}selected{% endif %} data-t>{{ r }}</option>{% endfor %}</select>
+          </form>
+        </td>
+        <td>
+          <form method="POST" action="{{ url_for('user_update', username=u.username) }}">
+            <select name="district" onchange="this.form.submit()"><option value="" data-t>All districts</option>{% for d in C.PERIODIC_DISTRICTS %}<option value="{{ d }}" {% if u.district == d %}selected{% endif %} data-t>{{ d }}</option>{% endfor %}</select>
+          </form>
+        </td>
+        <td>
+          <form method="POST" action="{{ url_for('user_update', username=u.username) }}">
+            <input type="hidden" name="active" value="{{ '0' if u.active else '1' }}">
+            <button class="btn btn-secondary btn-sm" type="submit" {% if u.username == session.get('username') %}disabled{% endif %}>
+              {% if u.active %}<span data-t>Active</span> · <span data-t>Disable</span>{% else %}<span data-t>Disabled</span> · <span data-t>Enable</span>{% endif %}
+            </button>
+          </form>
+        </td>
+        <td>
+          <form method="POST" action="{{ url_for('user_update', username=u.username) }}" class="comment-form inline">
+            <input type="password" name="password" minlength="8" placeholder="New password" data-tp autocomplete="new-password">
+            <button class="btn btn-secondary btn-sm" type="submit" data-t>Save</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty" data-t>No users yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title_suffix %} – Export{% endblock %}
+{% block topbar_title %}<span data-t>Export</span>{% endblock %}
+
+{% block content %}
+<div class="page-sub" data-t>Choose filters, then download the matching reports in the format you need.</div>
+{% include '_filters.html' %}
+
+<div class="card">
+  <div class="card-title"><span>{{ count }} <span data-t>reports match these filters</span></span></div>
+  <div class="export-grid">
+    {% for fmt, icon, label, desc in [
+      ('docx', '📝', 'Word (DOCX)', 'Report table and full descriptions'),
+      ('xlsx', '📗', 'Excel (XLSX)', 'All fields, participant breakdown and a summary sheet'),
+      ('pptx', '📙', 'PowerPoint (PPTX)', 'Charts by district, activity and report type, plus report tables'),
+      ('pdf',  '📕', 'PDF', 'Printable report table')] %}
+    <a class="export-card" href="{{ url_for('export_file', fmt=fmt, **filters) }}">
+      <div class="export-icon">{{ icon }}</div>
+      <div class="export-label">{{ label }}</div>
+      <div class="export-desc" data-t>{{ desc }}</div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

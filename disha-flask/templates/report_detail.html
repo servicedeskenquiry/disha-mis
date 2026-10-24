@@ -1,69 +1,131 @@
 {% extends "base.html" %}
 {% block title_suffix %} – Report #{{ report.id }}{% endblock %}
-{% block topbar_title %}Report #{{ report.id }}{% endblock %}
+{% block topbar_title %}<span data-t>Report</span> #{{ report.id }}{% endblock %}
+
 
 {% block content %}
-<a href="{{ url_for('reports') }}" class="btn btn-secondary"
-  style="padding:6px 14px;font-size:12px;margin-bottom:12px" id="rd-back">← Back to list</a>
+{% macro file_card(f, ref=False) %}
+  <a class="fp" href="{{ file_url(f) }}" target="_blank" rel="noopener">
+    {% if (f.type or '').startswith('image/') %}
+      <img src="{{ file_url(f) }}" alt="{{ f.name }}">
+    {% elif (f.type or '').startswith('video/') %}
+      <div class="ficon">🎬</div>
+    {% else %}
+      <div class="ficon">{{ '📄' if 'pdf' in (f.type or '') else '📝' }}</div>
+    {% endif %}
+    <div class="fname">{{ f.name }}</div>
+    {% if ref %}<div class="fsize">↗ #{{ f.report_id }}</div>{% endif %}
+  </a>
+{% endmacro %}
+<div class="list-head">
+  <a href="{{ url_for('reports', rtype=report.rtype) }}" class="btn btn-secondary btn-sm" data-t>← Back to list</a>
+  <div class="export-btns">
+    <span data-t>Download</span>:
+    {% for fmt, label in [('docx','Word'),('pdf','PDF'),('xlsx','Excel'),('pptx','PPT')] %}
+    <a class="btn btn-secondary btn-sm" href="{{ url_for('export_file', fmt=fmt, id=report.id) }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+</div>
 
 <div class="card">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+  <div class="form-head">
     <div>
-      <div style="font-size:15px;font-weight:600">Report #{{ report.id }} — {{ report.activity }}</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:2px">{{ report.office }} · {{ report.period }}</div>
+      <div style="font-size:15px;font-weight:600">#{{ report.id }} — <span data-t>{{ report.activity }}</span></div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px"><span data-t>{{ report.district }}</span> · {{ report.period }}</div>
     </div>
-    <span class="pill pill-{{ report.status.lower() }}">{{ report.status }}</span>
+    <span class="pill pill-{{ report.status|lower }}" data-t>{{ report.status }}</span>
   </div>
 
   <div class="detail-meta">
-    <div class="meta-item">
-      <div class="meta-label">Office</div>
-      <div class="meta-value">{{ report.office }}</div>
-    </div>
-    <div class="meta-item">
-      <div class="meta-label">Type</div>
-      <div class="meta-value">{{ report.rtype.capitalize() }}</div>
-    </div>
-    <div class="meta-item">
-      <div class="meta-label">Period</div>
-      <div class="meta-value">{{ report.period }}</div>
-    </div>
-    <div class="meta-item">
-      <div class="meta-label">Participants</div>
-      <div class="meta-value">{{ report.participants or '—' }}</div>
-    </div>
-    <div class="meta-item">
-      <div class="meta-label">Submitted by</div>
-      <div class="meta-value">{{ report.by }}</div>
-    </div>
-    <div class="meta-item">
-      <div class="meta-label">Date</div>
-      <div class="meta-value">{{ report.date }}</div>
-    </div>
+    <div class="meta-item"><div class="meta-label" data-t>Active District</div><div class="meta-value" data-t>{{ report.district }}</div></div>
+    <div class="meta-item"><div class="meta-label" data-t>Type</div><div class="meta-value" data-t>{{ C.REPORT_TYPE_LABEL[report.rtype] }}</div></div>
+    <div class="meta-item"><div class="meta-label" data-t>{{ 'Date' if report.rtype == 'daily' else 'Period' }}</div><div class="meta-value">{{ report.period }}</div></div>
+    <div class="meta-item"><div class="meta-label" data-t>Location / Venue</div><div class="meta-value">{{ report.location or '—' }}</div></div>
+    <div class="meta-item"><div class="meta-label" data-t>Submitted by</div><div class="meta-value">{{ report.submitted_by }}</div></div>
+    <div class="meta-item"><div class="meta-label" data-t>Submitted</div><div class="meta-value">{{ report.created_at|dt }}</div></div>
   </div>
 
-  <div class="sec-div" id="dd-desc-label">Description</div>
-  <div style="font-size:13px;line-height:1.8;padding:4px 0 12px">{{ report.desc }}</div>
+  {% if report.tags %}
+  <div class="sec-div" data-t>🏷️ Issue Tags</div>
+  <div style="margin-bottom:12px">{% for t in report.tags %}<a class="tag" href="{{ url_for('reports', tag=t) }}" data-t>{{ t }}</a>{% endfor %}</div>
+  {% endif %}
 
-  {% if report.attachments %}
-  <div class="sec-div" id="dd-attach-label">Attachments</div>
-  <div class="fpg">
-    {% for f in report.attachments %}
-    <div class="fp">
-      {% if f.type.startswith('image/') %}
-        <img src="{{ f.data }}" alt="{{ f.name }}">
-      {% else %}
-        <div class="ficon">{{ '📄' if 'pdf' in f.type else '📝' }}</div>
-      {% endif %}
-      <div class="fname">{{ f.name }}</div>
-    </div>
+  {% if report.participants %}
+  <div class="sec-div" data-t>👥 Participant Information</div>
+  <div class="mini-stats" style="margin-bottom:12px">
+    <div class="mini-stat big"><b>{{ report.participants.get('total', report.participants_total) }}</b><span data-t>Total Participants</span></div>
+    {% for c in C.PARTICIPANT_CATEGORIES if report.participants.get(c.key) %}
+    <div class="mini-stat"><b>{{ report.participants[c.key] }}</b><span data-t>{{ c.label }}</span></div>
     {% endfor %}
   </div>
   {% endif %}
 
-  <div class="sec-div" style="margin-top:12px" id="dd-approval-label">Approval Actions</div>
-  <div style="background:var(--amber-bg);border:1px solid #f0d080;border-radius:8px;padding:11px 15px;font-size:13px;color:var(--amber)" id="dd-approval-msg">
-    🔒 Approval workflow is under development — coming soon.
+  {% set fields = C.ACTIVITY_FIELDS.get(report.activity, []) %}
+  {% if report.details %}
+  <div class="sec-div"><span data-t>Activity format</span>: <span data-t>{{ report.activity }}</span></div>
+  <div class="detail-meta">
+    {% for fd in fields if report.details.get(fd.key) %}
+    <div class="meta-item {% if fd.type == 'textarea' %}wide{% endif %}"><div class="meta-label" data-t>{{ fd.label }}</div><div class="meta-value">{{ report.details[fd.key] }}</div></div>
+    {% endfor %}
   </div>
+  {% endif %}
+
+  <div class="sec-div" data-t>Description</div>
+  <div class="prose">{{ report.description }}</div>
+  {% if report.remarks %}
+  <div class="sec-div" data-t>Remarks</div>
+  <div class="prose">{{ report.remarks }}</div>
+  {% endif %}
+
+  {% if report.attachments or report.archive_refs %}
+  <div class="sec-div" data-t>📎 Attachments</div>
+  {% for cat in C.ATTACHMENT_CATEGORIES %}
+    {% set files = report.attachments|selectattr('category', 'equalto', cat.key)|list %}
+    {% set refs = report.archive_refs|selectattr('category', 'equalto', cat.key)|list %}
+    {% if files or refs %}
+    <div class="attach-cat" data-t>{{ cat.label }}</div>
+    <div class="fpg" style="margin-bottom:12px">
+      {% for f in files %}{{ file_card(f) }}{% endfor %}
+      {% for f in refs %}{{ file_card(f, True) }}{% endfor %}
+    </div>
+    {% endif %}
+  {% endfor %}
+  {% endif %}
+</div>
+
+<!-- ADMIN COMMENTS & APPROVAL -->
+<div class="card">
+  <div class="card-title" data-t>💬 Admin Comments</div>
+  {% for c in report.comments %}
+  <div class="comment">
+    <div class="comment-meta"><strong>{{ c.by }}</strong> · {{ c.at|dt(true) }}</div>
+    <div>{{ c.text }}</div>
+  </div>
+  {% else %}
+  <div class="empty" style="padding:6px 0 12px" data-t>No comments yet.</div>
+  {% endfor %}
+
+  <form method="POST" action="{{ url_for('report_comment', report_id=report.id) }}" class="comment-form">
+    <textarea name="comment" placeholder="Write an observation or comment on this report…" data-tp required></textarea>
+    <button type="submit" class="btn btn-secondary" data-t>Add Comment</button>
+  </form>
+
+  <div class="sec-div" style="margin-top:14px" data-t>Approval</div>
+  {% if report.status == 'Approved' %}
+    <div class="approved-note">✅ <span data-t>Approved</span>{% if report.approved_by %} · {{ report.approved_by }} · {{ report.approved_at|dt }}{% endif %}</div>
+  {% endif %}
+  {% if can_approve %}
+  <form method="POST" action="{{ url_for('report_status', report_id=report.id) }}" class="btn-group" style="margin-top:8px">
+    {% if report.status == 'Pending' %}
+      <input type="hidden" name="status" value="Approved">
+      <button type="submit" class="btn btn-primary" data-t>✅ Approve</button>
+    {% else %}
+      <input type="hidden" name="status" value="Pending">
+      <button type="submit" class="btn btn-secondary" data-t>↩ Move back to Pending</button>
+    {% endif %}
+  </form>
+  {% elif report.status == 'Pending' %}
+    <div class="empty" data-t>Waiting for a Super Admin to approve.</div>
+  {% endif %}
 </div>
 {% endblock %}

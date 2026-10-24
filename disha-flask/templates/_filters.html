@@ -1,0 +1,40 @@
+{# Shared filter bar. Expects: filters, fys; optional: hide (list of filter names to hide), action #}
+{% set hide = hide or [] %}
+<form method="GET" class="filter-form" action="{{ action or '' }}">
+  {% if filters.get('rtype') and 'rtype' in hide %}<input type="hidden" name="rtype" value="{{ filters.rtype }}">{% endif %}
+  {% if 'rtype' not in hide %}
+  <select name="rtype" aria-label="Report type">
+    <option value="" data-t>All report types</option>
+    {% for t in C.REPORT_TYPES %}<option value="{{ t.key }}" {% if filters.get('rtype') == t.key %}selected{% endif %} data-t>{{ t.label }}</option>{% endfor %}
+  </select>
+  {% endif %}
+  <select name="district" aria-label="District">
+    <option value="" data-t>All districts</option>
+    {% for d in C.PERIODIC_DISTRICTS %}<option value="{{ d }}" {% if filters.get('district') == d %}selected{% endif %} data-t>{{ d }}</option>{% endfor %}
+  </select>
+  <select name="tag" aria-label="Issue tag">
+    <option value="" data-t>All tags</option>
+    {% for t in C.ISSUE_TAGS %}<option value="{{ t }}" {% if filters.get('tag') == t %}selected{% endif %} data-t>{{ t }}</option>{% endfor %}
+  </select>
+  <select name="activity" aria-label="Activity type">
+    <option value="" data-t>All activity types</option>
+    {% for a in C.ACTIVITY_NAMES %}<option value="{{ a }}" {% if filters.get('activity') == a %}selected{% endif %} data-t>{{ a }}</option>{% endfor %}
+  </select>
+  <select name="fy" aria-label="Financial year">
+    <option value="" data-t>All years</option>
+    {% for y in fys %}<option value="{{ y }}" {% if filters.get('fy')|string == y|string %}selected{% endif %}>{{ fy_label(y) }}</option>{% endfor %}
+  </select>
+  <select name="month" aria-label="Month">
+    <option value="" data-t>All months</option>
+    {% for m in C.FY_MONTHS %}<option value="{{ m }}" {% if filters.get('month')|string == m|string %}selected{% endif %} data-t>{{ C.MONTHS[m-1] }}</option>{% endfor %}
+  </select>
+  {% if 'status' not in hide %}
+  <select name="status" aria-label="Status">
+    <option value="" data-t>All statuses</option>
+    {% for s in C.STATUSES %}<option value="{{ s }}" {% if filters.get('status') == s %}selected{% endif %} data-t>{{ s }}</option>{% endfor %}
+  </select>
+  {% endif %}
+  <input type="search" name="q" value="{{ filters.get('q', '') }}" placeholder="Search…" data-tp aria-label="Search">
+  <button type="submit" class="btn btn-primary btn-sm" data-t>Filter</button>
+  {% if filters %}<a href="?{% if filters.get('rtype') and 'rtype' in hide %}rtype={{ filters.rtype }}{% endif %}" class="btn btn-secondary btn-sm" data-t>Clear</a>{% endif %}
+</form>

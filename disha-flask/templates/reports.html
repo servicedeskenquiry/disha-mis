@@ -1,69 +1,93 @@
 {% extends "base.html" %}
 {% block title_suffix %} – Reports{% endblock %}
-{% block topbar_title %}<span id="rep-heading">All Reports</span>{% endblock %}
+{% block topbar_title %}<span data-t>All Reports</span>{% endblock %}
 
 {% block content %}
-<div class="page-sub" id="rep-sub">
-  {% if session.get('mode') == 'guest' %}
-    Showing public reports only — log in to view all
-  {% else %}
-    Click any row to view details
-  {% endif %}
-</div>
-
 {% if session.get('mode') == 'admin' %}
-<div class="filter-bar">
-  <a href="{{ url_for('reports') }}"
-    class="btn btn-secondary filter-btn {% if not filter_type and not filter_status %}active{% endif %}" id="rf-all">All</a>
-  <a href="{{ url_for('reports', type='daily') }}"
-    class="btn btn-secondary filter-btn {% if filter_type == 'daily' %}active{% endif %}" id="rf-daily">📋 Daily</a>
-  <a href="{{ url_for('reports', type='quarter') }}"
-    class="btn btn-secondary filter-btn {% if filter_type == 'quarter' %}active{% endif %}" id="rf-quarter">📊 Quarter</a>
-  <a href="{{ url_for('reports', type='annual') }}"
-    class="btn btn-secondary filter-btn {% if filter_type == 'annual' %}active{% endif %}" id="rf-annual">📈 Annual</a>
-  <a href="{{ url_for('reports', status='Pending') }}"
-    class="btn btn-secondary filter-btn {% if filter_status == 'Pending' %}active{% endif %}"
-    style="color:#e67e00">Pending</a>
-  <a href="{{ url_for('reports', status='Approved') }}"
-    class="btn btn-secondary filter-btn {% if filter_status == 'Approved' %}active{% endif %}"
-    style="color:#1a7a4a">Approved</a>
-</div>
+  {% include '_reports_tabs.html' %}
+  {% with hide=(['rtype'] if filters.get('rtype') else []) %}{% include '_filters.html' %}{% endwith %}
+
+  <div class="list-head">
+    <div class="page-sub" style="margin:0">{{ reports|length }} <span data-t>reports</span> · <span data-t>Click any row to view details</span></div>
+    <div class="export-btns">
+      <span data-t>Download</span>:
+      {% for fmt, label in [('docx','Word'),('xlsx','Excel'),('pptx','PPT'),('pdf','PDF')] %}
+      <a class="btn btn-secondary btn-sm" href="{{ url_for('export_file', fmt=fmt, **filters) }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if tracker %}
+  <div class="card">
+    <div class="card-title">
+      <span><span data-t>Monthly Report Tracker</span> — {{ tracker.fy_label }}</span>
+      <span class="legend"><span class="cell-done">✓</span> <span data-t>Done</span> <span class="cell-due">!</span> <span data-t>Due</span></span>
+    </div>
+    <div class="table-scroll">
+    <table class="tracker">
+      <thead><tr><th data-t>District</th>{% for l in tracker.labels %}<th data-t>{{ l }}</th>{% endfor %}<th data-t>Done</th><th data-t>Due</th></tr></thead>
+      <tbody>
+        {% for row in tracker.rows %}
+        <tr>
+          <td data-t>{{ row.district }}</td>
+          {% for c in row.cells %}
+            {% if c.state == 'done' %}
+              <td class="tc"><a class="cell-done" href="{{ url_for('report_detail', report_id=c.id) }}" title="#{{ c.id }} · {{ c.status }}">✓</a></td>
+            {% elif c.state == 'due' %}
+              <td class="tc"><span class="cell-due" title="Due">!</span></td>
+            {% else %}
+              <td class="tc muted">·</td>
+            {% endif %}
+          {% endfor %}
+          <td class="tc"><strong>{{ row.done }}</strong></td>
+          <td class="tc">{% if row.due %}<strong style="color:var(--amber)">{{ row.due }}</strong>{% else %}0{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+  {% endif %}
+{% else %}
+  <div class="page-sub" data-t>Showing public reports only — log in to view all</div>
 {% endif %}
 
 <div class="blur-wrap">
-  <div id="report-table-inner" {% if session.get('mode') == 'guest' %}style="filter:blur(3px);pointer-events:none"{% endif %}>
+  <div {% if session.get('mode') == 'guest' %}style="filter:blur(3px);pointer-events:none"{% endif %}>
     <div class="card" style="padding:0;overflow:hidden">
+      <div class="table-scroll">
       <table>
         <thead>
           <tr>
             <th>#</th>
-            <th id="rth-office">Office</th>
-            <th id="rth-act">Activity</th>
-            <th id="rth-type">Type</th>
-            <th id="rth-period">Period</th>
-            <th id="rth-by">By</th>
-            <th id="rth-status">Status</th>
+            <th data-t>District</th>
+            <th data-t>Activity</th>
+            <th data-t>Type</th>
+            <th data-t>Date / Period</th>
+            <th data-t>Participants</th>
+            <th data-t>Issue Tags</th>
+            <th data-t>Status</th>
           </tr>
         </thead>
         <tbody>
           {% for r in reports %}
           <tr class="clickable"
-            {% if session.get('mode') == 'admin' %}
-              onclick="window.location='{{ url_for('report_detail', report_id=r.id) }}'"
-            {% endif %}>
+            {% if session.get('mode') == 'admin' %}onclick="window.location='{{ url_for('report_detail', report_id=r.id) }}'"{% endif %}>
             <td><strong>#{{ r.id }}</strong></td>
-            <td>{{ r.office }}</td>
-            <td style="max-width:180px">{{ r.activity }}</td>
-            <td><span class="pill pill-{{ r.rtype }}">{{ r.rtype.capitalize() }}</span></td>
+            <td data-t>{{ r.district }}</td>
+            <td style="max-width:220px" data-t>{{ r.activity }}</td>
+            <td><span class="pill pill-{{ r.rtype }}" data-t>{{ C.REPORT_TYPE_SHORT[r.rtype] }}</span></td>
             <td>{{ r.period }}</td>
-            <td>{{ r.by }}</td>
-            <td><span class="pill pill-{{ r.status.lower() }}">{{ r.status }}</span></td>
+            <td>{{ r.participants_total or '—' }}</td>
+            <td>{% for t in r.tags %}<span class="tag" data-t>{{ t }}</span>{% endfor %}</td>
+            <td><span class="pill pill-{{ r.status|lower }}" data-t>{{ r.status }}</span>{% if r.comments %} <span title="Has comments">💬</span>{% endif %}</td>
           </tr>
           {% else %}
-          <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">No reports found.</td></tr>
+          <tr><td colspan="8" class="empty" data-t>No reports found.</td></tr>
           {% endfor %}
         </tbody>
       </table>
+      </div>
     </div>
   </div>
 
@@ -71,10 +95,9 @@
   <div class="blur-over">
     <div class="blur-box">
       <div style="font-size:28px;margin-bottom:6px">🔒</div>
-      <div style="font-size:14px;font-weight:600;margin-bottom:4px" id="bl-title">Login Required</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px" id="bl-desc">Log in to view all reports and details.</div>
-      <a href="{{ url_for('login') }}" class="btn btn-primary"
-        style="width:100%;justify-content:center" id="bl-btn">Log In Now</a>
+      <div style="font-size:14px;font-weight:600;margin-bottom:4px" data-t>Login Required</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px" data-t>Log in to view all reports and details.</div>
+      <a href="{{ url_for('login') }}" class="btn btn-primary" style="width:100%;justify-content:center" data-t>Log In Now</a>
     </div>
   </div>
   {% endif %}

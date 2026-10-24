@@ -1,0 +1,10 @@
+{# Sub-sections of All Reports #}
+{% set cur = 'dashboard' if request.endpoint == 'reports_dashboard' else (filters.get('rtype') or 'all') %}
+{% set keep_tag = {'tag': filters.tag} if filters.get('tag') else {} %}
+<div class="subtabs">
+  <a href="{{ url_for('reports_dashboard', **keep_tag) }}" class="subtab {% if cur == 'dashboard' %}active{% endif %}">📊 <span data-t>Dashboard</span></a>
+  <a href="{{ url_for('reports', **keep_tag) }}" class="subtab {% if cur == 'all' %}active{% endif %}">📋 <span data-t>All Reports</span></a>
+  {% for t in C.REPORT_TYPES %}
+  <a href="{{ url_for('reports', rtype=t.key, **keep_tag) }}" class="subtab {% if cur == t.key %}active{% endif %}">{{ t.icon }} <span data-t>{{ t.label }}s</span></a>
+  {% endfor %}
+</div>

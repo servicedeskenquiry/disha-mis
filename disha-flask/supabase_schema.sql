@@ -3,7 +3,7 @@
 --
 -- If you ran the OLD schema earlier, the old "reports" table only holds demo
 -- data and has different columns. Drop it first by uncommenting the next line:
- DROP TABLE IF EXISTS reports;
+-- DROP TABLE IF EXISTS reports;
 
 -- ─────────────────────────────────────────────
 -- Reports

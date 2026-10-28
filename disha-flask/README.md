@@ -57,7 +57,7 @@ Everything the client may revise is in **`config.py`**:
 | `PARTICIPANT_CATEGORIES` | Women, Men, Fisher, Fish Workers, Fish Farmers, Leaders, Organisers, Experts, Others |
 | `QUARTERS`, `HALVES` | Indian financial year (Q1 = Apr–Jun, H1 = Apr–Sep) |
 | `MAX_ATTACHMENTS`, `MAX_FILE_MB` | 10 files per report, 25 MB each |
-| `LOGO_FILE` | Replace `static/img/disha-logo.svg` (a placeholder) with the official DISHA logo |
+| `LOGO_FILE`, `FAVICON_FILE` | Official DISHA green-leaf logo in `static/img/` |
 
 Bengali text lives in `static/js/i18n_bn.js`, keyed by the English text. Add a line there for any new label.
 

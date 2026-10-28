@@ -13,8 +13,9 @@ proposed issue-tag list; replace the lists below when those arrive.
 ORG_NAME = "Society for Direct Initiative for Social and Health Action (DISHA)"
 ORG_SHORT = "DISHA"
 SYSTEM_NAME = "Fisheries Data Management System"
-# Replace static/img/disha-logo.svg with the official logo (or point this at a PNG)
-LOGO_FILE = "img/disha-logo.svg"
+# Official DISHA logo (green leaf). Favicon is a small copy of the same logo.
+LOGO_FILE = "img/disha-logo.png"
+FAVICON_FILE = "img/favicon.png"
 
 # ─────────────────────────────────────────────
 # Welcome page sections (only Fisheries is active for now)

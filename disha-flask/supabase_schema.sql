@@ -1,5 +1,5 @@
 -- DISHA MIS v2 schema (client review 28.09.2026)
--- Run this whole file in the Supabase SQL Editor.
+-- Run this whole file in the Supabase SQL Editor, then supabase_lockdown.sql.
 --
 -- If you ran the OLD schema earlier, the old "reports" table only holds demo
 -- data and has different columns. Drop it first by uncommenting the next line:
@@ -39,15 +39,9 @@ CREATE INDEX IF NOT EXISTS reports_district_idx ON reports (district);
 CREATE INDEX IF NOT EXISTS reports_rtype_idx    ON reports (rtype);
 CREATE INDEX IF NOT EXISTS reports_tags_idx     ON reports USING GIN (tags);
 
+-- Row Level Security is on with no policies: only the server's
+-- service_role key (SUPABASE_SERVICE_KEY) can read or write.
 ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow anon read"   ON reports;
-DROP POLICY IF EXISTS "Allow anon insert" ON reports;
-DROP POLICY IF EXISTS "Allow authenticated insert" ON reports;
-DROP POLICY IF EXISTS "Allow anon update" ON reports;
-CREATE POLICY "Allow anon read"   ON reports FOR SELECT USING (true);
-CREATE POLICY "Allow anon insert" ON reports FOR INSERT WITH CHECK (true);
--- Needed for approvals and comments (without it updates silently do nothing)
-CREATE POLICY "Allow anon update" ON reports FOR UPDATE USING (true) WITH CHECK (true);
 
 -- ─────────────────────────────────────────────
 -- Users (User Management). Passwords are stored as werkzeug hashes.
@@ -64,25 +58,10 @@ CREATE TABLE IF NOT EXISTS app_users (
     created_at     TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow anon read users"   ON app_users;
-DROP POLICY IF EXISTS "Allow anon insert users" ON app_users;
-DROP POLICY IF EXISTS "Allow anon update users" ON app_users;
-CREATE POLICY "Allow anon read users"   ON app_users FOR SELECT USING (true);
-CREATE POLICY "Allow anon insert users" ON app_users FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow anon update users" ON app_users FOR UPDATE USING (true) WITH CHECK (true);
 
--- ─────────────────────────────────────────────
--- Storage bucket for attachments (photos, videos, PDFs, minutes)
--- ─────────────────────────────────────────────
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('attachments', 'attachments', true)
-ON CONFLICT (id) DO NOTHING;
+-- Attachments and backups are stored in Backblaze B2 (see b2.py), not in
+-- Supabase Storage.
 
-DROP POLICY IF EXISTS "Allow anon upload attachments" ON storage.objects;
-DROP POLICY IF EXISTS "Allow anon read attachments"   ON storage.objects;
-CREATE POLICY "Allow anon upload attachments" ON storage.objects
-    FOR INSERT WITH CHECK (bucket_id = 'attachments');
-CREATE POLICY "Allow anon read attachments" ON storage.objects
-    FOR SELECT USING (bucket_id = 'attachments');
-
+-- Lock-down and the restore function used by Backup & Restore:
+-- run supabase_lockdown.sql after this file.
 -- Optional demo data: run supabase_seed.sql after this file.

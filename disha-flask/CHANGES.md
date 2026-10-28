@@ -1,3 +1,15 @@
+# Phase 1: safe foundations (revised module, 28.10.2026)
+
+| Item | Status | Where |
+|---|---|---|
+| Server uses the private service_role key; open anon policies removed | ✅ | `store.py`, `supabase_lockdown.sql` |
+| Attachments stored in a private Backblaze B2 bucket, opened through 10-minute signed links | ✅ | `b2.py`, `store.save_file`, `/files/...` |
+| Copy old Supabase Storage files to B2, then make that bucket private | ✅ | Admin › Backup & Restore |
+| Backup now / download backup / restore (with automatic safety backup) | ✅ | `backup.py`, `templates/backup.html` |
+| Nightly backup at 02:00 IST, kept 30 days; also keeps Supabase awake | ✅ | `/cron/nightly`, `.github/workflows/nightly-backup.yml` (repo root) |
+| Secure session cookies on Render | ✅ | `app.py` |
+| `/health` shows file storage and whether the database is locked | ✅ | `app.py` |
+
 # DISHA MIS: client review changes (Preliminary Review Note, 28.09.2026)
 
 Status: ✅ done · 🟡 done with a placeholder or assumption, needs client input

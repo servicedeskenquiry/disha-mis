@@ -1,3 +1,5 @@
+import hmac
+import io
 import logging
 import os
 from datetime import date, datetime
@@ -14,6 +16,8 @@ from flask import (  # noqa: E402
 from werkzeug.security import check_password_hash, generate_password_hash  # noqa: E402
 
 import analytics as A  # noqa: E402
+import b2  # noqa: E402
+import backup  # noqa: E402
 import config as C  # noqa: E402
 import exports  # noqa: E402
 import store  # noqa: E402
@@ -23,6 +27,8 @@ logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
+                  SESSION_COOKIE_SECURE=bool(os.environ.get("RENDER")))
 # 10 attachments × 25 MB plus form fields
 app.config["MAX_CONTENT_LENGTH"] = (C.MAX_ATTACHMENTS * C.MAX_FILE_MB + 5) * 1024 * 1024
 
@@ -91,6 +97,7 @@ def inject_globals():
         "can_approve": can_approve(),
         "can_manage_users": can_manage_users(),
         "backend": store.BACKEND,
+        "insecure_db": store.INSECURE_KEY,
         "fy_label": A.fy_label,
         "today": date.today(),
     }
@@ -108,7 +115,9 @@ def fmt_dt(value, with_time=False):
 
 
 def file_url(f):
-    return f.get("url") or url_for("uploaded_file", path=f.get("path", ""))
+    if f.get("storage") in ("b2", "local") or not f.get("url"):
+        return url_for("uploaded_file", path=f.get("path", ""), name=f.get("name"))
+    return f["url"]
 
 
 app.jinja_env.globals["file_url"] = file_url
@@ -291,7 +300,8 @@ def submit():
             src = next(r for r in reports if str(r["id"]) == rid)["attachments"][int(idx)]
             refs.append({"report_id": int(rid), "name": src.get("name"),
                          "category": src.get("category"), "type": src.get("type"),
-                         "url": src.get("url"), "path": src.get("path")})
+                         "url": src.get("url"), "path": src.get("path"),
+                         "storage": src.get("storage")})
     if len(uploads) + len(refs) > C.MAX_ATTACHMENTS:
         errors.append(f"A report can have at most {C.MAX_ATTACHMENTS} attachments.")
     for _, fs in uploads:
@@ -311,10 +321,11 @@ def submit():
             if len(content) > C.MAX_FILE_MB * 1024 * 1024:
                 flash(f"{fs.filename} is larger than {C.MAX_FILE_MB} MB and was skipped.", "error")
                 continue
-            url, path = store.save_file(fs.filename, content, fs.content_type)
+            url, path, storage = store.save_file(fs.filename, content, fs.content_type)
             attachments.append({"category": cat, "name": fs.filename,
                                 "type": fs.content_type or "application/octet-stream",
-                                "size": len(content), "url": url, "path": path})
+                                "size": len(content), "url": url, "path": path,
+                                "storage": storage})
 
         report = {
             "rtype": rtype, "district": district, "activity": activity,
@@ -587,14 +598,155 @@ def user_update(username):
 # Files, health and API
 # ─────────────────────────────────────────────
 @app.route("/files/<path:path>")
-@staff_required
+@login_required
 def uploaded_file(path):
+    if b2.ENABLED:
+        # Private bucket: a signed link that stops working after 10 minutes
+        return redirect(b2.signed_url(b2.ATTACHMENT_PREFIX + path, request.args.get("name")))
     return send_from_directory(store.LOCAL_UPLOAD_DIR, path)
 
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok", "backend": store.BACKEND})
+    return jsonify({"status": "ok", "backend": store.BACKEND,
+                    "file_storage": store.FILE_STORAGE,
+                    "database_locked": store.BACKEND == "supabase" and not store.INSECURE_KEY})
+
+
+# ─────────────────────────────────────────────
+# Backup and restore (Admin only)
+# ─────────────────────────────────────────────
+def admin_only(view):
+    @wraps(view)
+    @staff_required
+    def wrapped(*a, **kw):
+        if not can_manage_users():
+            flash("Only a Super Admin can use Backup & Restore.", "error")
+            return redirect(url_for("dashboard"))
+        return view(*a, **kw)
+    return wrapped
+
+
+@app.route("/admin/backup")
+@admin_only
+def backup_page():
+    backups, to_migrate = [], 0
+    try:
+        backups = backup.list_backups()
+    except StoreError as e:
+        flash(str(e), "error")
+    if b2.ENABLED and store.BACKEND == "supabase":
+        try:
+            to_migrate = store.files_to_migrate(store.all_reports())
+        except StoreError as e:
+            flash(str(e), "error")
+    return render_template("backup.html", backups=backups, b2_enabled=b2.ENABLED,
+                           to_migrate=to_migrate, keep_days=backup.KEEP_DAYS,
+                           cron_ready=bool(os.environ.get("CRON_SECRET")))
+
+
+@app.route("/admin/backup/now", methods=["POST"])
+@admin_only
+def backup_now():
+    try:
+        name, counts = backup.save_to_b2()
+        flash(f"Backup saved: {name} ({counts['reports']} reports, {counts['app_users']} users).")
+    except StoreError as e:
+        flash(str(e), "error")
+    return redirect(url_for("backup_page"))
+
+
+@app.route("/admin/backup/download")
+@admin_only
+def backup_download():
+    """A fresh backup straight to the Admin's computer."""
+    try:
+        name, data, _ = backup.build()
+    except StoreError as e:
+        flash(str(e), "error")
+        return redirect(url_for("backup_page"))
+    return send_file(io.BytesIO(data), mimetype="application/gzip",
+                     as_attachment=True, download_name=name)
+
+
+@app.route("/admin/backup/file/<name>")
+@admin_only
+def backup_file(name):
+    try:
+        data = backup.load_from_b2(name)
+    except StoreError as e:
+        flash(str(e), "error")
+        return redirect(url_for("backup_page"))
+    return send_file(io.BytesIO(data), mimetype="application/gzip",
+                     as_attachment=True, download_name=name)
+
+
+@app.route("/admin/restore", methods=["POST"])
+@admin_only
+def restore():
+    f = request.form
+    if f.get("confirm", "").strip().upper() != "RESTORE":
+        flash("Type RESTORE in the box to confirm. Nothing was changed.", "error")
+        return redirect(url_for("backup_page"))
+    try:
+        upload = request.files.get("backup_file")
+        if upload and upload.filename:
+            data = upload.read()
+        elif f.get("name"):
+            data = backup.load_from_b2(f["name"])
+        else:
+            raise StoreError("Choose a backup to restore.")
+        counts, safety = backup.restore(backup.parse(data))
+    except StoreError as e:
+        flash(str(e), "error")
+        return redirect(url_for("backup_page"))
+    msg = (f"Restore complete: {counts.get('reports', 0)} reports and "
+           f"{counts.get('app_users', 0)} users are now in the system.")
+    if safety:
+        msg += f" The data from before the restore was saved as {safety}."
+    flash(msg)
+    restored_users = store.list_users()
+    if restored_users and not any(u["username"] == session.get("username") for u in restored_users):
+        session.clear()
+        flash("Your account is not in the restored data. Log in with an account from the backup.")
+        return redirect(url_for("login"))
+    return redirect(url_for("backup_page"))
+
+
+@app.route("/admin/migrate-files", methods=["POST"])
+@admin_only
+def migrate_files():
+    try:
+        copied, remaining, errors = store.migrate_files_to_b2()
+    except StoreError as e:
+        flash(str(e), "error")
+        return redirect(url_for("backup_page"))
+    for e in errors[:5]:
+        flash(f"Could not copy {e}", "error")
+    if remaining:
+        flash(f"Copied {copied} files to Backblaze B2. {remaining} still to go: "
+              f"press the button again.")
+    else:
+        flash(f"Copied {copied} files. All attachments are now stored in Backblaze B2.")
+    return redirect(url_for("backup_page"))
+
+
+@app.route("/cron/nightly", methods=["POST"])
+def cron_nightly():
+    """Called once a night by the GitHub Action (.github/workflows/nightly-backup.yml).
+
+    Saves a backup to B2. Reading the database also keeps the free
+    Supabase project from pausing.
+    """
+    secret = os.environ.get("CRON_SECRET", "")
+    given = request.headers.get("X-Cron-Secret", "")
+    if not secret or not hmac.compare_digest(secret, given):
+        abort(403)
+    try:
+        name, counts = backup.save_to_b2()
+    except StoreError as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+    return jsonify({"status": "ok", "backup": name, "counts": counts})
 
 
 @app.route("/api/reports")

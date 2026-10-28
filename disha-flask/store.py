@@ -2,20 +2,27 @@
 Data access for DISHA MIS.
 
 Two backends behind one interface:
-  • Supabase (when SUPABASE_URL and SUPABASE_KEY are set)
+  • Supabase (when SUPABASE_URL and a key are set)
   • In-memory demo store (data resets on restart)
+
+Files go to Backblaze B2 when it is configured (see b2.py), otherwise to
+Supabase Storage, otherwise to the local disk.
 
 Unlike the first version, Supabase errors are logged and raised as
 StoreError instead of silently falling back to demo data, so a bad key
 or a missing RLS policy shows up immediately.
 """
+import base64
+import json
 import logging
 import os
+import time
 import uuid
 from datetime import datetime, timezone
 
 from werkzeug.security import generate_password_hash
 
+import b2
 import demo_data
 
 log = logging.getLogger("disha.store")
@@ -39,11 +46,30 @@ def now_iso():
 # ─────────────────────────────────────────────
 supabase = None
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+# The service_role key lets the server bypass Row Level Security, so the
+# database itself can refuse everyone else. SUPABASE_KEY (anon) is the old
+# setup and only works while the open RLS policies still exist.
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
+SUPABASE_KEY = SUPABASE_SERVICE_KEY or os.environ.get("SUPABASE_KEY", "").strip()
+
+
+def _jwt_role(key):
+    """The 'role' claim of a legacy Supabase key: 'anon' or 'service_role'."""
+    try:
+        payload = key.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        return json.loads(base64.urlsafe_b64decode(payload)).get("role", "")
+    except Exception:
+        return ""
+
+
+KEY_ROLE = _jwt_role(SUPABASE_KEY) if SUPABASE_KEY else ""
 if SUPABASE_URL and SUPABASE_KEY:
     if not SUPABASE_KEY.startswith("eyJ"):
-        log.error("SUPABASE_KEY does not look like a JWT (eyJ...). supabase==2.7.4 "
-                  "needs the legacy anon key, not the sb_publishable_ key.")
+        log.error("The Supabase key does not look like a JWT (eyJ...). supabase==2.7.4 "
+                  "needs the legacy keys, not the sb_publishable_ / sb_secret_ keys.")
+    elif SUPABASE_SERVICE_KEY and KEY_ROLE != "service_role":
+        log.error("SUPABASE_SERVICE_KEY is not a service_role key (role=%r).", KEY_ROLE)
     try:
         from supabase import create_client
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -52,6 +78,9 @@ if SUPABASE_URL and SUPABASE_KEY:
         supabase = None
 
 BACKEND = "supabase" if supabase else "memory"
+# True when the database still relies on the open anon policies
+INSECURE_KEY = bool(supabase) and KEY_ROLE != "service_role"
+FILE_STORAGE = "b2" if b2.ENABLED else ("supabase" if supabase else "local")
 
 # ─────────────────────────────────────────────
 # In-memory store
@@ -142,8 +171,8 @@ def update_report(report_id, changes):
             res = supabase.table("reports").update(changes).eq("id", report_id).execute()
             if not res.data:
                 # RLS silently filters updates when no UPDATE policy exists
-                raise StoreError("Update was blocked. Check that the 'Allow anon update' "
-                                 "RLS policy from supabase_schema.sql exists.")
+                raise StoreError("Update was blocked by Row Level Security. Set "
+                                 "SUPABASE_SERVICE_KEY (the service_role key) in Render.")
             return
         except StoreError:
             raise
@@ -161,14 +190,24 @@ def update_report(report_id, changes):
 # Attachments
 # ─────────────────────────────────────────────
 def save_file(filename, content, content_type):
-    """Store a file and return (url, path)."""
+    """Store a file and return (url, path, storage).
+
+    storage is "b2", "supabase" or "local". B2 and local files have no
+    public URL: they are served through the /files route to logged-in users.
+    """
     safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in filename)[-80:]
     path = f"{datetime.now():%Y/%m}/{uuid.uuid4().hex[:12]}_{safe}"
+    content_type = content_type or "application/octet-stream"
+    if b2.ENABLED:
+        try:
+            b2.put(b2.ATTACHMENT_PREFIX + path, content, content_type)
+        except b2.B2Error as e:
+            raise StoreError(f"Could not upload {filename}: {e}")
+        return None, path, "b2"
     if supabase:
         try:
-            supabase.storage.from_(BUCKET).upload(
-                path, content, {"content-type": content_type or "application/octet-stream"})
-            return supabase.storage.from_(BUCKET).get_public_url(path), path
+            supabase.storage.from_(BUCKET).upload(path, content, {"content-type": content_type})
+            return supabase.storage.from_(BUCKET).get_public_url(path), path, "supabase"
         except Exception as e:
             log.exception("Supabase storage upload failed")
             raise StoreError(f"Could not upload {filename}: {e}")
@@ -176,7 +215,61 @@ def save_file(filename, content, content_type):
     os.makedirs(os.path.dirname(full), exist_ok=True)
     with open(full, "wb") as fh:
         fh.write(content)
-    return None, path   # URL is built by the /files route
+    return None, path, "local"
+
+
+def files_to_migrate(reports):
+    """Attachments still held in Supabase Storage (not yet copied to B2)."""
+    n = 0
+    for r in reports:
+        for f in (r.get("attachments") or []) + (r.get("archive_refs") or []):
+            if f.get("path") and f.get("storage") != "b2" and f.get("url"):
+                n += 1
+    return n
+
+
+def migrate_files_to_b2(time_budget=20):
+    """Copy Supabase Storage attachments to B2, a batch at a time.
+
+    Runs until the time budget is used up so one request never hits the
+    server timeout. Returns (copied, remaining, errors). When nothing is
+    left, the Supabase bucket is made private so the old public links stop
+    working.
+    """
+    if not (supabase and b2.ENABLED):
+        raise StoreError("Both Supabase and Backblaze B2 must be configured.")
+    start, copied, errors, done = time.time(), 0, [], {}
+    for r in all_reports():
+        changed = False
+        for key in ("attachments", "archive_refs"):
+            for f in r.get(key) or []:
+                if not (f.get("path") and f.get("storage") != "b2" and f.get("url")):
+                    continue
+                if time.time() - start > time_budget:
+                    break
+                path = f["path"]
+                try:
+                    if path not in done:
+                        content = supabase.storage.from_(BUCKET).download(path)
+                        b2.put(b2.ATTACHMENT_PREFIX + path, content,
+                               f.get("type") or "application/octet-stream")
+                        done[path] = True
+                        copied += 1
+                    f["storage"], f["url"] = "b2", None
+                    changed = True
+                except Exception as e:
+                    log.exception("Could not migrate %s", path)
+                    errors.append(f"{f.get('name') or path}: {e}")
+        if changed:
+            update_report(r["id"], {"attachments": r["attachments"],
+                                    "archive_refs": r["archive_refs"]})
+    remaining = files_to_migrate(all_reports())
+    if remaining == 0 and not errors:
+        try:
+            supabase.storage.update_bucket(BUCKET, {"public": False})
+        except Exception:
+            log.exception("Could not make the Supabase bucket private")
+    return copied, remaining, errors
 
 
 # ─────────────────────────────────────────────
@@ -228,3 +321,61 @@ def save_user(user, is_new):
         _USERS[user["username"]] = user
     else:
         _USERS[user["username"]].update(user)
+
+
+# ─────────────────────────────────────────────
+# Backup and restore (whole database)
+# ─────────────────────────────────────────────
+BACKUP_TABLES = {"reports": "id", "app_users": "username"}
+
+
+def dump_tables():
+    """Every row of every table, unmodified, as a backup payload."""
+    tables = {}
+    if supabase:
+        try:
+            for table, order in BACKUP_TABLES.items():
+                rows, start, page = [], 0, 1000
+                while True:
+                    res = (supabase.table(table).select("*").order(order)
+                           .range(start, start + page - 1).execute())
+                    batch = res.data or []
+                    rows.extend(batch)
+                    if len(batch) < page:
+                        break
+                    start += page
+                tables[table] = rows
+        except Exception as e:
+            log.exception("Backup read failed")
+            raise StoreError(f"Could not read the database for backup: {e}")
+    else:
+        tables = {"reports": [dict(r) for r in sorted(_REPORTS, key=lambda r: r["id"])],
+                  "app_users": [dict(u) for u in sorted(_USERS.values(), key=lambda u: u["username"])]}
+    return {"app": "disha-mis", "version": 1, "created_at": now_iso(),
+            "backend": BACKEND, "tables": tables}
+
+
+def validate_backup(payload):
+    if not isinstance(payload, dict) or payload.get("app") != "disha-mis":
+        raise StoreError("This file is not a DISHA MIS backup.")
+    tables = payload.get("tables") or {}
+    for t in BACKUP_TABLES:
+        if not isinstance(tables.get(t), list):
+            raise StoreError(f"The backup is missing the '{t}' table.")
+    return {t: len(tables[t]) for t in BACKUP_TABLES}
+
+
+def restore_tables(payload):
+    """Replace all data with the backup, in one transaction (Supabase)."""
+    counts = validate_backup(payload)
+    if supabase:
+        try:
+            res = supabase.rpc("disha_restore", {"payload": payload}).execute()
+            return res.data or counts
+        except Exception as e:
+            log.exception("Restore failed")
+            raise StoreError(f"Restore failed, nothing was changed: {e}")
+    _REPORTS[:] = [dict(r) for r in payload["tables"]["reports"]]
+    _USERS.clear()
+    _USERS.update({u["username"]: dict(u) for u in payload["tables"]["app_users"]})
+    return counts

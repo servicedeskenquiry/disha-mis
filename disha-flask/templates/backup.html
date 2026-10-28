@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title_suffix %} – Backup & Restore{% endblock %}
+{% block topbar_title %}<span data-t>Backup & Restore</span>{% endblock %}
+
+{% block content %}
+{% if not b2_enabled %}
+<div class="flash-warn">
+  ⚠ <span data-t>Backblaze B2 is not set up yet, so backups cannot be saved online and new files are not stored in B2. You can still download a backup to your computer.</span>
+</div>
+{% elif not cron_ready %}
+<div class="flash-warn">
+  ⚠ <span data-t>The nightly automatic backup is not switched on yet: CRON_SECRET is missing in Render.</span>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-title" data-t>Make a backup</div>
+  <div class="hint" style="margin-top:0" data-t>A backup is one file with every report, comment and user account. Attached files are kept safely in Backblaze B2 and are not inside the backup file.</div>
+  <div class="btn-group">
+    {% if b2_enabled %}
+    <form method="POST" action="{{ url_for('backup_now') }}">
+      <button class="btn btn-primary" type="submit" data-t>Save a backup in Backblaze now</button>
+    </form>
+    {% endif %}
+    <a class="btn btn-secondary" href="{{ url_for('backup_download') }}" data-t>Download a backup to this computer</a>
+  </div>
+  {% if b2_enabled %}
+  <div class="hint"><span data-t>A backup is also saved automatically every night. Backups older than</span> {{ keep_days }} <span data-t>days are deleted automatically.</span></div>
+  {% endif %}
+</div>
+
+{% if b2_enabled %}
+<div class="card" style="padding:0;overflow:hidden">
+  <div class="card-title" style="padding:14px 16px 0" data-t>Saved backups</div>
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th data-t>Backup</th><th data-t>Saved on</th><th data-t>Size</th><th data-t>Download</th></tr></thead>
+    <tbody>
+      {% for b in backups %}
+      <tr>
+        <td>{{ b.name }}</td>
+        <td>{{ b.modified.strftime('%d %b %Y, %H:%M') }} UTC</td>
+        <td>{{ '%.1f' % (b.size / 1024) }} KB</td>
+        <td><a class="btn btn-secondary btn-sm" href="{{ url_for('backup_file', name=b.name) }}" data-t>Download</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="empty" data-t>No backups saved yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-title" data-t>Restore from a backup</div>
+  <div class="flash-warn">⚠ <span data-t>Restoring replaces ALL current reports and user accounts with the ones in the backup. Anything entered after that backup was made will be removed. A safety backup of the current data is saved first.</span></div>
+  <form method="POST" action="{{ url_for('restore') }}" enctype="multipart/form-data" class="form-grid">
+    {% if b2_enabled %}
+    <div class="fg2"><label data-t>Choose a saved backup</label>
+      <select name="name"><option value="" data-t>(none)</option>{% for b in backups %}<option value="{{ b.name }}">{{ b.name }}</option>{% endfor %}</select>
+    </div>
+    {% endif %}
+    <div class="fg2"><label data-t>Or upload a backup file from this computer</label>
+      <input type="file" name="backup_file" accept=".gz,.json">
+    </div>
+    <div class="fg2"><label data-t>Type RESTORE to confirm</label>
+      <input name="confirm" autocomplete="off" placeholder="RESTORE">
+    </div>
+    <div class="fg2" style="justify-content:flex-end"><button class="btn btn-primary" type="submit" data-t>Restore</button></div>
+  </form>
+</div>
+
+{% if to_migrate %}
+<div class="card">
+  <div class="card-title" data-t>Move old files to Backblaze B2</div>
+  <div class="hint" style="margin-top:0">{{ to_migrate }} <span data-t>attached files are still in the old Supabase storage, where anyone with the link can open them. Copy them to Backblaze B2 to make them private. Large numbers of files are copied in batches: press the button until it says all files are done.</span></div>
+  <form method="POST" action="{{ url_for('migrate_files') }}" class="btn-group">
+    <button class="btn btn-primary" type="submit" data-t>Copy files to Backblaze B2</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

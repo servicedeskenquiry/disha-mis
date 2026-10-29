@@ -2,10 +2,18 @@
 {% block title_suffix %} – User Management{% endblock %}
 {% block topbar_title %}<span data-t>User Management</span>{% endblock %}
 
+{% macro district_boxes(selected) %}
+<div class="check-grid">
+  {% for d in C.PERIODIC_DISTRICTS %}
+  <label><input type="checkbox" name="districts" value="{{ d }}" {% if d in selected %}checked{% endif %}> <span data-t>{{ d }}</span></label>
+  {% endfor %}
+</div>
+{% endmacro %}
+
 {% block content %}
 {% if demo_active %}
 <div class="flash-warn">
-  ⚠ <span data-t>The demo logins (admin / staff) are active because no users exist yet. Create a Super Admin account for yourself first: once any user exists, the demo logins stop working.</span>
+  ⚠ <span data-t>The demo logins are active because no users exist yet. Create an Admin account for yourself first: once any user exists, the demo logins stop working.</span>
 </div>
 {% endif %}
 
@@ -16,20 +24,24 @@
     <div class="fg2"><label data-t>Full Name</label><input name="full_name"></div>
     <div class="fg2"><label data-t>Password</label><input type="password" name="password" minlength="8" required autocomplete="new-password"></div>
     <div class="fg2"><label data-t>Role</label>
-      <select name="role">{% for r in C.ROLES %}<option value="{{ r }}" data-t>{{ r }}</option>{% endfor %}</select>
+      <select name="role">{% for r in C.ROLES %}<option value="{{ r }}" {% if demo_active and r == C.ADMIN %}selected{% endif %} data-t>{{ r }}</option>{% endfor %}</select>
     </div>
-    <div class="fg2"><label data-t>Active District</label>
-      <select name="district"><option value="" data-t>All districts</option>{% for d in C.PERIODIC_DISTRICTS %}<option value="{{ d }}" data-t>{{ d }}</option>{% endfor %}</select>
+    <div class="fg2 full" style="grid-column:1/-1">
+      <label data-t>Districts</label>
+      <div class="hint" style="margin:0" data-t>Approver: the districts whose reports they review. Leave all unticked for all districts.</div>
+      {{ district_boxes([]) }}
     </div>
     <div class="fg2" style="justify-content:flex-end"><button class="btn btn-primary" type="submit" data-t>Create User</button></div>
   </form>
-  <div class="hint" data-t>Super Admin: approve reports and manage users. Back Office: submit, view, comment and export.</div>
+  <div class="hint">
+    {% for r in C.ROLES %}<div><strong data-t>{{ r }}</strong>: <span data-t>{{ C.ROLE_HELP[r] }}</span></div>{% endfor %}
+  </div>
 </div>
 
 <div class="card" style="padding:0;overflow:hidden">
   <div class="table-scroll">
   <table>
-    <thead><tr><th data-t>Username</th><th data-t>Full Name</th><th data-t>Role</th><th data-t>Active District</th><th data-t>Status</th><th data-t>Reset Password</th></tr></thead>
+    <thead><tr><th data-t>Username</th><th data-t>Full Name</th><th data-t>Role</th><th data-t>Districts</th><th data-t>Status</th><th data-t>Reset Password</th></tr></thead>
     <tbody>
       {% for u in users %}
       <tr>
@@ -40,9 +52,14 @@
             <select name="role" onchange="this.form.submit()">{% for r in C.ROLES %}<option value="{{ r }}" {% if u.role == r %}selected{% endif %} data-t>{{ r }}</option>{% endfor %}</select>
           </form>
         </td>
-        <td>
+        <td style="min-width:180px">
           <form method="POST" action="{{ url_for('user_update', username=u.username) }}">
-            <select name="district" onchange="this.form.submit()"><option value="" data-t>All districts</option>{% for d in C.PERIODIC_DISTRICTS %}<option value="{{ d }}" {% if u.district == d %}selected{% endif %} data-t>{{ d }}</option>{% endfor %}</select>
+            <input type="hidden" name="set_districts" value="1">
+            <details class="district-pick">
+              <summary>{% if u.districts %}{{ u.districts|join(', ') }}{% else %}<span data-t>All districts</span>{% endif %} ✏️</summary>
+              {{ district_boxes(u.districts) }}
+              <button class="btn btn-secondary btn-sm" type="submit" data-t>Save</button>
+            </details>
           </form>
         </td>
         <td>

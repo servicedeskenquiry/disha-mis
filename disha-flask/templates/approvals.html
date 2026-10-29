@@ -1,9 +1,22 @@
 {% extends "base.html" %}
-{% block title_suffix %} – Approval Queue{% endblock %}
-{% block topbar_title %}<span data-t>Approval Queue</span>{% endblock %}
+{% set returned_view = view == 'returned' %}
+{% set page_title = 'Returned to Me' if role == C.BACK_OFFICE else 'Approval Queue' %}
+{% block title_suffix %} – {{ page_title }}{% endblock %}
+{% block topbar_title %}<span data-t>{{ page_title }}</span>{% endblock %}
 
 {% block content %}
-<div class="page-sub">{{ reports|length }} <span data-t>reports waiting for approval</span></div>
+{% if can_approve %}
+<div class="queue-tabs">
+  <a href="{{ url_for('approvals', view='review') }}" class="btn btn-sm {{ 'btn-primary' if not returned_view else 'btn-secondary' }}"><span data-t>Waiting for review</span> ({{ counts.review }})</a>
+  <a href="{{ url_for('approvals', view='returned') }}" class="btn btn-sm {{ 'btn-primary' if returned_view else 'btn-secondary' }}"><span data-t>Returned to Back Office</span> ({{ counts.returned }})</a>
+</div>
+{% endif %}
+<div class="page-sub">
+  {{ reports|length }}
+  {% if role == C.BACK_OFFICE %}<span data-t>of your reports have a query or were rejected. Correct them and resubmit.</span>
+  {% elif returned_view %}<span data-t>reports are waiting for Back Office to respond</span>
+  {% else %}<span data-t>reports waiting for approval</span>{% endif %}
+</div>
 {% with hide=['status'] %}{% include '_filters.html' %}{% endwith %}
 
 {% for r in reports %}
@@ -13,6 +26,7 @@
       <a href="{{ url_for('report_detail', report_id=r.id) }}" class="queue-title">#{{ r.id }} — <span data-t>{{ r.activity }}</span></a>
       <div class="queue-meta">
         <span class="pill pill-{{ r.rtype }}" data-t>{{ C.REPORT_TYPE_SHORT[r.rtype] }}</span>
+        <span class="pill pill-{{ r.status|lower }}" data-t>{{ C.STATUS_LABEL[r.status] }}</span>
         <span data-t>{{ r.district }}</span> · {{ r.period }} · {{ r.submitted_by }} · <span data-t>Submitted</span> {{ r.created_at|dt }}
         {% if r.participants_total %} · {{ r.participants_total }} <span data-t>participants</span>{% endif %}
       </div>
@@ -21,24 +35,27 @@
   </div>
   <div class="queue-desc">{{ r.description|truncate(260) }}</div>
   {% if r.comments %}
-  <div class="comment"><div class="comment-meta"><strong>{{ r.comments[-1].by }}</strong> · {{ r.comments[-1].at|dt(true) }}</div>{{ r.comments[-1].text }}</div>
+  {% set c = r.comments[-1] %}
+  <div class="comment {% if c.kind %}kind-{{ c.kind }}{% endif %}"><div class="comment-meta"><strong>{{ c.by }}</strong> · {{ c.at|dt(true) }}</div>{{ c.text }}</div>
   {% endif %}
-  <div class="queue-actions">
-    <form method="POST" action="{{ url_for('report_comment', report_id=r.id) }}" class="comment-form inline">
-      <input type="hidden" name="next" value="{{ request.full_path }}">
-      <input type="text" name="comment" placeholder="Comment / observation…" data-tp required>
-      <button type="submit" class="btn btn-secondary btn-sm" data-t>Add Comment</button>
-    </form>
-    {% if can_approve %}
-    <form method="POST" action="{{ url_for('report_status', report_id=r.id) }}">
-      <input type="hidden" name="next" value="{{ request.full_path }}">
-      <input type="hidden" name="status" value="Approved">
-      <button type="submit" class="btn btn-primary btn-sm" data-t>✅ Approve</button>
-    </form>
-    {% endif %}
+
+  {% if can_review(r) and not returned_view %}
+  <form method="POST" action="{{ url_for('report_review', report_id=r.id) }}" class="review-box">
+    <input type="hidden" name="next" value="{{ request.full_path }}">
+    <textarea name="comment" placeholder="Comment, query or reason for rejection (required for Query and Reject)" data-tp></textarea>
+    <div class="review-btns">
+      <button type="submit" name="action" value="approve" class="btn btn-primary btn-sm" data-t>✅ Approve</button>
+      <button type="submit" name="action" value="query" class="btn btn-query btn-sm" data-t>💬 Raise query</button>
+      <button type="submit" name="action" value="reject" class="btn btn-reject btn-sm" data-t>❌ Reject</button>
+    </div>
+  </form>
+  {% elif can_edit(r) and r.status in C.RETURNED_STATUSES %}
+  <div class="btn-group" style="margin-top:8px">
+    <a href="{{ url_for('report_edit', report_id=r.id) }}" class="btn btn-primary btn-sm">✏️ <span data-t>Answer and resubmit</span></a>
   </div>
+  {% endif %}
 </div>
 {% else %}
-<div class="card empty" data-t>Nothing waiting for approval. 🎉</div>
+<div class="card empty" data-t>{{ 'Nothing returned to you. 🎉' if role == C.BACK_OFFICE else 'Nothing here. 🎉' }}</div>
 {% endfor %}
 {% endblock %}

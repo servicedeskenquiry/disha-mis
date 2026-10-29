@@ -18,14 +18,30 @@
   </a>
 {% endmacro %}
 <div class="list-head">
-  <a href="{{ url_for('reports', rtype=report.rtype) }}" class="btn btn-secondary btn-sm" data-t>← Back to list</a>
+  <div class="btn-group" style="margin:0">
+    <a href="{{ url_for('reports', rtype=report.rtype) }}" class="btn btn-secondary btn-sm" data-t>← Back to list</a>
+    {% if can_edit(report) %}
+    <a href="{{ url_for('report_edit', report_id=report.id) }}" class="btn btn-primary btn-sm">✏️ <span data-t>{{ 'Answer and resubmit' if report.status in C.RETURNED_STATUSES and role == C.BACK_OFFICE else ('Correct (Admin override)' if report.status == 'Approved' else 'Edit') }}</span></a>
+    {% endif %}
+  </div>
+  {% if can_download %}
   <div class="export-btns">
     <span data-t>Download</span>:
     {% for fmt, label in [('docx','Word'),('pdf','PDF'),('xlsx','Excel'),('pptx','PPT')] %}
     <a class="btn btn-secondary btn-sm" href="{{ url_for('export_file', fmt=fmt, id=report.id) }}">{{ label }}</a>
     {% endfor %}
   </div>
+  {% endif %}
 </div>
+
+{% if report.status in C.RETURNED_STATUSES %}
+{% set last = (report.comments|selectattr('kind', 'in', ['query', 'reject'])|list)[-1:] %}
+<div class="returned-note {{ 'query' if report.status == 'Query' else 'reject' }}">
+  <strong>{{ '💬' if report.status == 'Query' else '❌' }} <span data-t>{{ C.STATUS_LABEL[report.status] }}</span></strong>
+  {% if last %} · {{ last[0].by }}: “{{ last[0].text }}”{% endif %}
+  {% if role == C.BACK_OFFICE and can_edit(report) %}<div style="margin-top:4px" data-t>Follow up with the field team, then click “Answer and resubmit” to correct the report.</div>{% endif %}
+</div>
+{% endif %}
 
 <div class="card">
   <div class="form-head">
@@ -33,7 +49,7 @@
       <div style="font-size:15px;font-weight:600">#{{ report.id }} — <span data-t>{{ report.activity }}</span></div>
       <div style="font-size:12px;color:var(--muted);margin-top:2px"><span data-t>{{ report.district }}</span> · {{ report.period }}</div>
     </div>
-    <span class="pill pill-{{ report.status|lower }}" data-t>{{ report.status }}</span>
+    <span class="pill pill-{{ report.status|lower }}" data-t>{{ C.STATUS_LABEL[report.status] }}</span>
   </div>
 
   <div class="detail-meta">
@@ -77,7 +93,7 @@
   <div class="prose">{{ report.remarks }}</div>
   {% endif %}
 
-  {% if report.attachments or report.archive_refs %}
+  {% if (report.attachments or report.archive_refs) and show_files %}
   <div class="sec-div" data-t>📎 Attachments</div>
   {% for cat in C.ATTACHMENT_CATEGORIES %}
     {% set files = report.attachments|selectattr('category', 'equalto', cat.key)|list %}
@@ -93,39 +109,85 @@
   {% endif %}
 </div>
 
-<!-- ADMIN COMMENTS & APPROVAL -->
+<!-- COMMENTS -->
 <div class="card">
-  <div class="card-title" data-t>💬 Admin Comments</div>
+  <div class="card-title" data-t>💬 Comments</div>
+  {% set kind_label = {'query': 'Query', 'reject': 'Rejected', 'resubmit': 'Resubmitted', 'approve': 'Approved'} %}
   {% for c in report.comments %}
-  <div class="comment">
-    <div class="comment-meta"><strong>{{ c.by }}</strong> · {{ c.at|dt(true) }}</div>
+  <div class="comment {% if c.kind %}kind-{{ c.kind }}{% endif %}">
+    <div class="comment-meta"><strong>{{ c.by }}</strong>{% if c.role %} · <span data-t>{{ c.role }}</span>{% endif %} · {{ c.at|dt(true) }}{% if c.kind %}<span class="comment-kind" data-t>{{ kind_label[c.kind] }}</span>{% endif %}</div>
     <div>{{ c.text }}</div>
   </div>
   {% else %}
   <div class="empty" style="padding:6px 0 12px" data-t>No comments yet.</div>
   {% endfor %}
 
+  {% if can_comment %}
   <form method="POST" action="{{ url_for('report_comment', report_id=report.id) }}" class="comment-form">
+    {% if session.get('mode') == 'guest' %}<input type="text" name="guest_name" maxlength="60" placeholder="Your name (optional)" data-tp>{% endif %}
     <textarea name="comment" placeholder="Write an observation or comment on this report…" data-tp required></textarea>
     <button type="submit" class="btn btn-secondary" data-t>Add Comment</button>
   </form>
-
-  <div class="sec-div" style="margin-top:14px" data-t>Approval</div>
-  {% if report.status == 'Approved' %}
-    <div class="approved-note">✅ <span data-t>Approved</span>{% if report.approved_by %} · {{ report.approved_by }} · {{ report.approved_at|dt }}{% endif %}</div>
-  {% endif %}
-  {% if can_approve %}
-  <form method="POST" action="{{ url_for('report_status', report_id=report.id) }}" class="btn-group" style="margin-top:8px">
-    {% if report.status == 'Pending' %}
-      <input type="hidden" name="status" value="Approved">
-      <button type="submit" class="btn btn-primary" data-t>✅ Approve</button>
-    {% else %}
-      <input type="hidden" name="status" value="Pending">
-      <button type="submit" class="btn btn-secondary" data-t>↩ Move back to Pending</button>
-    {% endif %}
-  </form>
-  {% elif report.status == 'Pending' %}
-    <div class="empty" data-t>Waiting for a Super Admin to approve.</div>
   {% endif %}
 </div>
+
+{% if session.get('mode') == 'admin' %}
+<!-- APPROVAL -->
+<div class="card">
+  <div class="card-title" data-t>Approval</div>
+  {% if report.status == 'Approved' %}
+    <div class="locked-note">🔒 <span data-t>Approved and locked</span>{% if report.approved_by %} · {{ report.approved_by }} · {{ report.approved_at|dt }}{% endif %}</div>
+    {% if is_admin %}
+    <form method="POST" action="{{ url_for('report_unlock', report_id=report.id) }}" class="review-box" onsubmit="return confirm(tr('Unlock this report and move it back to Pending?'))">
+      <textarea name="comment" placeholder="Reason for unlocking (optional)" data-tp></textarea>
+      <button type="submit" class="btn btn-secondary btn-sm" data-t>🔓 Unlock (move back to Pending)</button>
+    </form>
+    {% endif %}
+  {% elif can_review(report) %}
+    {% if report.status in C.RETURNED_STATUSES %}<div class="empty" style="padding:0 0 6px" data-t>Waiting for Back Office to respond.</div>{% endif %}
+    <form method="POST" action="{{ url_for('report_review', report_id=report.id) }}" class="review-box">
+      <textarea name="comment" placeholder="Comment, query or reason for rejection (required for Query and Reject)" data-tp></textarea>
+      <div class="review-btns">
+        <button type="submit" name="action" value="approve" class="btn btn-primary btn-sm" data-t>✅ Approve</button>
+        <button type="submit" name="action" value="query" class="btn btn-query btn-sm" data-t>💬 Raise query</button>
+        <button type="submit" name="action" value="reject" class="btn btn-reject btn-sm" data-t>❌ Reject</button>
+      </div>
+    </form>
+  {% elif report.status in C.RETURNED_STATUSES %}
+    <div class="empty" data-t>Waiting for Back Office to respond.</div>
+  {% else %}
+    <div class="empty" data-t>Waiting for an Approver.</div>
+  {% endif %}
+
+  {% if is_admin %}
+  <div class="sec-div" style="margin-top:14px" data-t>Guest visibility</div>
+  <form method="POST" action="{{ url_for('report_guest_visibility', report_id=report.id) }}" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px">
+    {% if report.guest_hidden %}
+      <span>🙈 <span data-t>Hidden from guests</span></span>
+      <input type="hidden" name="hidden" value="0">
+      <button class="btn btn-secondary btn-sm" type="submit" data-t>Show to guests</button>
+    {% else %}
+      <span>👁 <span data-t>Guests can see this report once it is approved</span></span>
+      <input type="hidden" name="hidden" value="1">
+      <button class="btn btn-secondary btn-sm" type="submit" data-t>Hide from guests</button>
+    {% endif %}
+  </form>
+  {% endif %}
+</div>
+
+{% if report.history %}
+<div class="card">
+  <div class="card-title" data-t>🕑 History</div>
+  <ul class="history">
+    {% for h in report.history|reverse %}
+    <li>
+      <strong data-t>{{ h.action }}</strong> · {{ h.by }}{% if h.role %} (<span data-t>{{ h.role }}</span>){% endif %} · <span class="h-when">{{ h.at|dt(true) }}</span>
+      {% if h.changes %}<div class="h-when"><span data-t>Changed</span>: {{ h.changes|join(', ') }}</div>{% endif %}
+      {% if h.note %}<div class="h-note">{{ h.note }}</div>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% endif %}
 {% endblock %}

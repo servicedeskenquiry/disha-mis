@@ -31,7 +31,7 @@ def row(r):
         r.get("location") or "",
         r.get("participants_total") or 0,
         ", ".join(r.get("tags") or []),
-        r.get("status") or "",
+        C.STATUS_LABEL.get(r.get("status"), r.get("status") or ""),
         r.get("submitted_by") or "",
         r.get("description") or "",
     ]

@@ -30,18 +30,28 @@
       </a>
       {% if mode == 'admin' %}
         <div class="nav-section" data-t>Reports</div>
+        {% if can_enter %}
         <a class="nav-item {% if request.endpoint == 'submit' %}active{% endif %}" href="{{ url_for('submit') }}">
           <span class="nav-icon">📝</span><span data-t>Submit Report</span>
         </a>
-        <a class="nav-item {% if request.endpoint in ('reports', 'report_detail', 'reports_dashboard') %}active{% endif %}" href="{{ url_for('reports_dashboard') }}">
-          <span class="nav-icon">📋</span><span data-t>All Reports</span>
+        {% endif %}
+        <a class="nav-item {% if request.endpoint in ('reports', 'report_detail', 'reports_dashboard', 'report_edit') %}active{% endif %}" href="{{ url_for('reports_dashboard') }}">
+          <span class="nav-icon">📋</span><span data-t>{{ 'My Reports' if role == C.BACK_OFFICE else 'All Reports' }}</span>
         </a>
+        {% if can_approve %}
         <a class="nav-item {% if request.endpoint == 'approvals' %}active{% endif %}" href="{{ url_for('approvals') }}">
           <span class="nav-icon">✅</span><span data-t>Approval Queue</span>
         </a>
+        {% else %}
+        <a class="nav-item {% if request.endpoint == 'approvals' %}active{% endif %}" href="{{ url_for('approvals') }}">
+          <span class="nav-icon">💬</span><span data-t>Returned to Me</span>{% if returned_count %}<span class="nav-badge">{{ returned_count }}</span>{% endif %}
+        </a>
+        {% endif %}
+        {% if can_download %}
         <a class="nav-item {% if request.endpoint == 'export_page' %}active{% endif %}" href="{{ url_for('export_page') }}">
           <span class="nav-icon">📤</span><span data-t>Export</span>
         </a>
+        {% endif %}
         <div class="nav-section" data-t>Coming Soon</div>
         <div class="nav-item locked" onclick="lock('Upload, view and download case documents.')">
           <span class="nav-icon">📌</span><span data-t>Case Studies</span><span class="lock-icon">🔒</span>
@@ -49,10 +59,13 @@
         <div class="nav-item locked" onclick="lock('Manage government scheme documents.')">
           <span class="nav-icon">🏛️</span><span data-t>Govt. Schemes</span><span class="lock-icon">🔒</span>
         </div>
-        {% if can_manage_users %}
+        {% if is_admin %}
         <div class="nav-section" data-t>Admin</div>
         <a class="nav-item {% if request.endpoint == 'users' %}active{% endif %}" href="{{ url_for('users') }}">
           <span class="nav-icon">👥</span><span data-t>User Management</span>
+        </a>
+        <a class="nav-item {% if request.endpoint == 'settings_page' %}active{% endif %}" href="{{ url_for('settings_page') }}">
+          <span class="nav-icon">⚙️</span><span data-t>Settings</span>
         </a>
         <a class="nav-item {% if request.endpoint == 'backup_page' %}active{% endif %}" href="{{ url_for('backup_page') }}">
           <span class="nav-icon">💾</span><span data-t>Backup & Restore</span>
@@ -88,7 +101,7 @@
           <div class="user-role" data-t>{{ session.get('role', 'View Only') }}</div>
         </div>
       </div>
-      <div class="mode-badge {{ 'mode-admin' if mode == 'admin' else 'mode-guest' }}" data-t>{{ '🟢 Admin Mode' if mode == 'admin' else '👁 Guest Mode' }}</div>
+      <div class="mode-badge {{ 'mode-admin' if mode == 'admin' else 'mode-guest' }}" data-t>{{ '🟢 Logged in' if mode == 'admin' else '👁 Guest Mode' }}</div>
       <a href="{{ url_for('logout') }}" class="btn-logout" data-t>⬅ Logout</a>
     </div>
   </div>
@@ -106,7 +119,7 @@
           <button class="lang-btn" data-lang="bn" onclick="setLang('bn')">বাংলা</button>
         </div>
         {% if mode != 'admin' %}
-          <a href="{{ url_for('login') }}" class="btn-sw btn-sw-admin" data-t>🔑 Log In as Admin</a>
+          <a href="{{ url_for('login') }}" class="btn-sw btn-sw-admin" data-t>🔑 Log In</a>
         {% endif %}
       </div>
     </div>

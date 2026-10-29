@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title_suffix %} – Settings{% endblock %}
+{% block topbar_title %}<span data-t>Settings</span>{% endblock %}
+
+{% block content %}
+<form method="POST">
+<div class="card">
+  <div class="card-title" data-t>👁 Guest access</div>
+  <label class="setting-row">
+    <input type="checkbox" name="guest_enabled" value="1" {% if s.guest_enabled %}checked{% endif %}>
+    <span><span data-t>Allow Guest mode</span><small data-t>Shows "Continue as Guest" on the login page. Guests only ever see approved reports and can never edit, approve or download.</small></span>
+  </label>
+  <label class="setting-row">
+    <input type="checkbox" name="guest_can_comment" value="1" {% if s.guest_can_comment %}checked{% endif %}>
+    <span><span data-t>Guests can add comments</span><small data-t>On the reports they can see.</small></span>
+  </label>
+  <label class="setting-row">
+    <input type="checkbox" name="guest_see_attachments" value="1" {% if s.guest_see_attachments %}checked{% endif %}>
+    <span><span data-t>Guests can open photos and documents</span><small data-t>Attached files of the reports they can see.</small></span>
+  </label>
+  <div class="setting-row" style="display:block">
+    <div data-t>Districts guests can see</div>
+    <small data-t>Leave all unticked to show every district.</small>
+    <div class="check-grid">
+      {% for d in C.PERIODIC_DISTRICTS %}
+      <label><input type="checkbox" name="guest_districts" value="{{ d }}" {% if d in s.guest_districts %}checked{% endif %}> <span data-t>{{ d }}</span></label>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="setting-row" style="display:block">
+    <div data-t>Report types guests can see</div>
+    <small data-t>Leave all unticked to show every type.</small>
+    <div class="check-grid">
+      {% for t in C.REPORT_TYPES %}
+      <label><input type="checkbox" name="guest_report_types" value="{{ t.key }}" {% if t.key in s.guest_report_types %}checked{% endif %}> <span data-t>{{ t.label }}</span></label>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="hint">
+    <span data-t>To hide one particular report from guests, open the report and use “Hide from guests”.</span>
+    {% if hidden %}<br><span data-t>Hidden now</span>: {% for r in hidden %}<a href="{{ url_for('report_detail', report_id=r.id) }}">#{{ r.id }}</a>{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title" data-t>🔐 Permissions</div>
+  <label class="setting-row">
+    <input type="checkbox" name="backoffice_can_download" value="1" {% if s.backoffice_can_download %}checked{% endif %}>
+    <span><span data-t>Back Office can download reports</span><small data-t>Only their own reports (Word, PDF, Excel, PowerPoint). Admin and Approvers can always download.</small></span>
+  </label>
+</div>
+
+<div class="btn-group"><button type="submit" class="btn btn-primary" data-t>Save Settings</button></div>
+</form>
+
+<div class="card" style="margin-top:16px">
+  <div class="card-title" data-t>Who can do what</div>
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th data-t>Action</th><th data-t>Admin</th><th data-t>Approver</th><th data-t>Back Office</th><th data-t>Guest</th></tr></thead>
+    <tbody>
+      {% for row in [
+        ('View reports', 'All', 'Own districts', 'Own entries', 'As allowed above'),
+        ('Enter / verify data', '✔', '✘', '✔', '✘'),
+        ('Tag issues & subjects', '✔', '✘', '✔', '✘'),
+        ('Approve / reject / raise query', '✔', '✔', '✘', '✘'),
+        ('Add comment', '✔', '✔', '✔', 'If allowed above'),
+        ('Issue-wise search', '✔', '✔', '✔', 'Limited'),
+        ('Download reports', '✔', '✔', 'Own, if allowed above', '✘'),
+        ('Correct an approved report', '✔', '✘', '✘', '✘'),
+        ('Manage users, settings, backup', '✔', '✘', '✘', '✘'),
+      ] %}
+      <tr>{% for cell in row %}<td {% if loop.first %}data-t{% endif %}>{% if not loop.first %}<span data-t>{{ cell }}</span>{% else %}{{ cell }}{% endif %}</td>{% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

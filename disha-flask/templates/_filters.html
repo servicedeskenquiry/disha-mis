@@ -31,7 +31,7 @@
   {% if 'status' not in hide %}
   <select name="status" aria-label="Status">
     <option value="" data-t>All statuses</option>
-    {% for s in C.STATUSES %}<option value="{{ s }}" {% if filters.get('status') == s %}selected{% endif %} data-t>{{ s }}</option>{% endfor %}
+    {% for s in C.STATUSES %}<option value="{{ s }}" {% if filters.get('status') == s %}selected{% endif %} data-t>{{ C.STATUS_LABEL[s] }}</option>{% endfor %}
   </select>
   {% endif %}
   <input type="search" name="q" value="{{ filters.get('q', '') }}" placeholder="Search…" data-tp aria-label="Search">

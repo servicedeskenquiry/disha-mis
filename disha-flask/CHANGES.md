@@ -1,3 +1,25 @@
+# Phase 2: roles, approval workflow and guest controls (revised module, 29.10.2026)
+
+Run `supabase_phase2.sql` in the Supabase SQL Editor **before** uploading this code.
+
+| Item | Status | Where |
+|---|---|---|
+| Four roles: Admin, Approver, Back Office, Guest (old "Super Admin" = Admin) | ✅ | `config.py`, `app.py` permission helpers |
+| Approver covers one or several districts (none ticked = all) | ✅ | User Management, `app_users.districts` |
+| Back Office sees only their own entries | ✅ | `can_view` |
+| Statuses Pending, Query raised, Rejected, Resubmitted, Approved (locked) | ✅ | `config.STATUSES`, `supabase_phase2.sql` |
+| Approve / Raise query / Reject (reason required for query and reject) | ✅ | Approval Queue, report page |
+| "Returned to Me" list with count badge for Back Office; answer and resubmit | ✅ | `approvals.html`, `/reports/<id>/edit` |
+| Edit a report: Back Office until approved, Admin always (correct approved reports, optional resubmit) | ✅ | `/reports/<id>/edit` |
+| Admin unlock of an approved report | ✅ | report page |
+| History of every step (who, when, which fields changed) | ✅ | `reports.history` |
+| Guests: approved reports by default; Admin can switch Guest mode off, limit districts/report types, hide single reports, turn off comments or attachments | ✅ | Admin › Settings, report page |
+| Guest comments with optional name | ✅ | report page |
+| Admin can switch off Back Office downloads | ✅ | Admin › Settings |
+| Permission matrix shown on the Settings page | ✅ | `settings.html` |
+| Settings included in backups and restore | ✅ | `store.BACKUP_TABLES`, `disha_restore()` |
+| Bengali text for the new screens | 🟡 needs a native speaker's review | `static/js/i18n_bn.js` |
+
 # Phase 1: safe foundations (revised module, 28.10.2026)
 
 | Item | Status | Where |

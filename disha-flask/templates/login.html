@@ -49,14 +49,16 @@
       <button type="submit" class="btn-login" data-t>Log In →</button>
     </form>
 
+    {% if guest_enabled %}
     <form method="POST" action="{{ url_for('login') }}">
       <input type="hidden" name="action" value="guest">
       <button type="submit" class="btn-guest" data-t>👁 Continue as Guest (View Only)</button>
     </form>
+    {% endif %}
 
     {% if demo_active %}
     <div class="login-hint">
-      Demo: admin / admin123 &nbsp;|&nbsp; staff / staff123<br>
+      Demo: admin / admin123 &nbsp;|&nbsp; approver / approver123 &nbsp;|&nbsp; staff / staff123<br>
       <span style="color:#b87800" data-t>Demo logins stop working once you create users.</span>
     </div>
     {% endif %}

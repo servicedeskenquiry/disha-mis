@@ -67,7 +67,22 @@ REPORT_TYPE_LABEL = {t["key"]: t["label"] for t in REPORT_TYPES}
 REPORT_TYPE_SHORT = {t["key"]: t["short"] for t in REPORT_TYPES}
 PERIODIC_TYPES = ["monthly", "quarterly", "halfyearly", "annual"]
 
-STATUSES = ["Pending", "Approved"]
+# Approval workflow (revised module, section 5)
+#   Pending      submitted, waiting for the Approver
+#   Query        Approver asked a question; Back Office must respond
+#   Rejected     returned with a reason; Back Office can correct and resubmit
+#   Resubmitted  corrected after a query or rejection, waiting again
+#   Approved     confirmed and locked (only an Admin can change it)
+STATUSES = ["Pending", "Query", "Rejected", "Resubmitted", "Approved"]
+STATUS_LABEL = {
+    "Pending": "Pending",
+    "Query": "Query raised",
+    "Rejected": "Rejected",
+    "Resubmitted": "Resubmitted",
+    "Approved": "Approved",
+}
+REVIEW_STATUSES = ("Pending", "Resubmitted")    # waiting for the Approver
+RETURNED_STATUSES = ("Query", "Rejected")       # waiting for Back Office
 
 # ─────────────────────────────────────────────
 # Activity types (5 + Others) and the template that opens for each.
@@ -203,8 +218,24 @@ ALLOWED_EXTENSIONS = {
 # ─────────────────────────────────────────────
 # Roles
 # ─────────────────────────────────────────────
-ROLES = ["Super Admin", "Back Office"]
-# Roles that can approve reports and comment as reviewer
-APPROVER_ROLES = {"Super Admin"}
-# Roles that can manage users
-USER_ADMIN_ROLES = {"Super Admin"}
+ADMIN = "Admin"
+APPROVER = "Approver"
+BACK_OFFICE = "Back Office"
+ROLES = [ADMIN, APPROVER, BACK_OFFICE]
+# Older accounts were created as "Super Admin"
+ROLE_ALIASES = {"Super Admin": ADMIN}
+ROLE_HELP = {
+    ADMIN: "Full control: all reports, approvals, users, settings, backups.",
+    APPROVER: "Reviews reports of their districts: approve, raise query, reject.",
+    BACK_OFFICE: "Enters and tags reports, answers queries. Sees own entries.",
+}
+
+# Defaults for Admin › Settings (stored in the app_settings table)
+DEFAULT_SETTINGS = {
+    "guest_enabled": True,          # show "Continue as Guest" on the login page
+    "guest_districts": [],          # empty = all districts
+    "guest_report_types": [],       # empty = all report types
+    "guest_can_comment": True,
+    "guest_see_attachments": True,
+    "backoffice_can_download": True,  # own reports only
+}

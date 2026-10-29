@@ -19,13 +19,14 @@ flask run
 
 Open `http://localhost:5000`. Without Supabase the app runs on in-memory demo data (about 250 reports across the 15 districts, reset on restart).
 
-Demo logins `admin / admin123` (Super Admin) and `staff / staff123` (Back Office) work **only until the first user is created** under *User Management*. Create your own Super Admin first.
+Demo logins `admin / admin123` (Admin), `approver / approver123` (Approver) and `staff / staff123` (Back Office) work **only until the first user is created** under *User Management*. The first account must be an Admin.
 
 ---
 
 ## Supabase setup
 
-1. **SQL Editor** → run `supabase_schema.sql`, then `supabase_lockdown.sql`. They create `reports`, `app_users`, Row Level Security with no open policies, and the `disha_restore()` function used by Backup & Restore.
+1. **SQL Editor** → run `supabase_schema.sql`, then `supabase_lockdown.sql`. They create `reports`, `app_users`, `app_settings`, Row Level Security with no open policies, and the `disha_restore()` function used by Backup & Restore.
+   - Upgrading a database from before Phase 2: run `supabase_phase2.sql` once, **before** deploying the Phase 2 code. It is safe to run twice.
    - If you ran the old v1 schema, uncomment the `DROP TABLE IF EXISTS reports;` line at the top first. The old table only held demo data.
 2. Optional: run `supabase_seed.sql` for demo reports.
 3. **Settings → API Keys → Legacy API Keys** → copy the `service_role` key (starts with `eyJ...`). `supabase==2.7.4` rejects the newer `sb_secret_...` keys.
@@ -34,7 +35,7 @@ Demo logins `admin / admin123` (Super Admin) and `staff / staff123` (Back Office
 
 Supabase errors are now shown on screen and logged, instead of silently falling back to demo data.
 
-Security note: the service_role key can read and change everything. It is only used on the server, never sent to the browser. Keep it secret and never commit `.env`. The old anon-key setup (`SUPABASE_KEY`) still works until `supabase_lockdown.sql` is run; while it is in use, Super Admins see a warning banner.
+Security note: the service_role key can read and change everything. It is only used on the server, never sent to the browser. Keep it secret and never commit `.env`. The old anon-key setup (`SUPABASE_KEY`) still works until `supabase_lockdown.sql` is run; while it is in use, Admins see a warning banner.
 
 ---
 
@@ -46,8 +47,8 @@ Files uploaded before B2 was set up can be copied over from **Admin › Backup &
 
 ## Backups
 
-**Admin › Backup & Restore** (Super Admin only):
-- Save a backup to B2 now, or download one to the computer (`disha-backup-….json.gz`: every row of `reports` and `app_users`).
+**Admin › Backup & Restore** (Admin only):
+- Save a backup to B2 now, or download one to the computer (`disha-backup-….json.gz`: every row of `reports`, `app_users` and `app_settings`).
 - Restore from a saved backup or an uploaded file. A safety backup is saved first, and the restore runs in one transaction.
 
 Nightly backups: `.github/workflows/nightly-backup.yml` (in the repository root, not in `disha-flask/`) calls `POST /cron/nightly` at 02:00 IST with the `X-Cron-Secret` header. Set `CRON_SECRET` in Render and the GitHub secrets `APP_URL` and `CRON_SECRET`. Backups older than 30 days are deleted (the newest 7 are always kept). The nightly read also keeps the free Supabase project from pausing.
@@ -111,11 +112,20 @@ templates/
 
 ## Roles
 
+Follows the permission matrix in the revised module. The full table is on **Admin › Settings**.
+
 | Role | Can do |
 |---|---|
-| Super Admin | Everything, including approving reports and managing users |
-| Back Office | Submit, view, comment, analytics, export |
-| Guest | Dashboard and a preview of approved reports (unchanged) |
+| Admin | Everything: all reports, approve/query/reject, correct approved reports, unlock, users, settings, backups |
+| Approver | Reports of their districts (one or several, set in User Management; none ticked = all): approve, raise query, reject, comment, download |
+| Back Office | Enter and edit their own reports until approved, answer queries and resubmit, comment, download own reports (Admin can switch download off) |
+| Guest | Approved reports only, filtered by Admin settings (districts, report types, per-report hide); can comment and open attachments if allowed; never edits or downloads |
+
+Old accounts with the role `Super Admin` are treated as Admin.
+
+### Report statuses
+
+`Pending` → Approver: **Approve** (locked), **Raise query** or **Reject** (both need a reason) → Back Office answers in *Returned to Me* and resubmits → `Resubmitted` → reviewed again. Approved reports can only be corrected or unlocked by the Admin. Every step is recorded in the report's History with who, when and which fields changed.
 
 ## Known limitations
 

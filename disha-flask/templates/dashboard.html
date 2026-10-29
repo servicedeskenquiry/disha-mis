@@ -18,7 +18,7 @@
 <div class="guest-banner">
   <div>
     <div style="font-size:13px;font-weight:600" data-t>👁 You are in Guest Mode</div>
-    <div style="font-size:12px;opacity:.7;margin-top:2px" data-t>Log in to submit or manage reports.</div>
+    <div style="font-size:12px;opacity:.7;margin-top:2px" data-t>You can view approved reports and add comments. Log in to submit or manage reports.</div>
   </div>
   <a href="{{ url_for('login') }}" class="btn-login-now" data-t>Log In →</a>
 </div>
@@ -37,8 +37,10 @@
     <div class="stat-label" data-t>Pending</div>
     <div class="stat-value">{{ stats.pending }}</div>
     <div class="stat-sub">
-      {% if session.get('mode') == 'admin' %}
+      {% if can_approve %}
         <a href="{{ url_for('approvals') }}" style="color:var(--amber)" data-t>⚠ Needs review</a>
+      {% elif session.get('mode') == 'admin' %}
+        {% if stats.returned %}<a href="{{ url_for('approvals') }}" style="color:var(--blue)">{{ stats.returned }} <span data-t>returned to you</span></a>{% else %}<span style="color:var(--muted)" data-t>Waiting for approval</span>{% endif %}
       {% else %}
         <span style="color:var(--muted)" data-t>Login to review</span>
       {% endif %}
@@ -83,8 +85,8 @@
 <!-- PENDING REPORTS -->
 <div class="card">
   <div class="card-title">
-    <span data-t>Pending Reports</span>
-    {% if session.get('mode') == 'admin' %}<a href="{{ url_for('approvals') }}" class="link-sm" data-t>Open Approval Queue →</a>{% endif %}
+    <span data-t>{{ 'Returned to Me' if role == C.BACK_OFFICE else 'Pending Reports' }}</span>
+    {% if can_approve %}<a href="{{ url_for('approvals') }}" class="link-sm" data-t>Open Approval Queue →</a>{% endif %}
   </div>
   {% if session.get('mode') == 'admin' %}
   <div class="table-scroll">
@@ -97,6 +99,7 @@
         <th data-t>Type</th>
         <th data-t>Date / Period</th>
         <th data-t>Submitted</th>
+        <th data-t>Status</th>
       </tr>
     </thead>
     <tbody>
@@ -108,9 +111,10 @@
         <td><span class="pill pill-{{ r.rtype }}" data-t>{{ C.REPORT_TYPE_SHORT[r.rtype] }}</span></td>
         <td>{{ r.period }}</td>
         <td>{{ r.created_at|dt }}</td>
+        <td><span class="pill pill-{{ r.status|lower }}" data-t>{{ C.STATUS_LABEL[r.status] }}</span></td>
       </tr>
       {% else %}
-      <tr><td colspan="6" class="empty" data-t>No pending reports.</td></tr>
+      <tr><td colspan="7" class="empty" data-t>{{ 'Nothing returned to you.' if role == C.BACK_OFFICE else 'No pending reports.' }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -126,7 +130,7 @@
 const DASH = {{ stats.charts|tojson }};
 onChartsReady(() => {
   barChart('monthChart', DASH.monthly.labels, [{label: 'Reports', data: DASH.monthly.data}]);
-  doughnutChart('statusChart', DASH.status.labels, DASH.status.data, ['#e67e00', '#2d9e65']);
+  doughnutChart('statusChart', DASH.status.labels, DASH.status.data, ['#e67e00', '#1a5fa8', '#c0392b', '#7b2fa8', '#2d9e65']);
   barChart('districtChart', DASH.district.labels, [{label: 'Reports', data: DASH.district.data, color: 'rgba(26,95,168,.75)'}], {horizontal: true});
   barChart('activityChart', DASH.activity.labels, [{label: 'Reports', data: DASH.activity.data, color: 'rgba(184,120,0,.75)'}], {wrapLabels: true});
 });

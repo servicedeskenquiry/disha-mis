@@ -139,6 +139,7 @@ const picked = {};   // category -> DataTransfer
 function attachTotal() {
   let n = Object.values(picked).reduce((s, dt) => s + dt.files.length, 0);
   n += document.querySelectorAll('input[name=archive_ref]:checked').length;
+  n += document.querySelectorAll('input[name=keep_file]:checked').length;
   return n;
 }
 

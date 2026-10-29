@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
 
 import b2
+import config as C
 import demo_data
 
 log = logging.getLogger("disha.store")
@@ -87,12 +88,16 @@ FILE_STORAGE = "b2" if b2.ENABLED else ("supabase" if supabase else "local")
 # ─────────────────────────────────────────────
 _REPORTS = demo_data.build_reports()
 _USERS = {}   # username -> user dict; empty means "demo logins active"
+_SETTINGS = {}
 DEMO_USERS = {
-    "admin": {"username": "admin", "full_name": "Admin User", "role": "Super Admin",
-              "district": "", "active": True,
+    "admin": {"username": "admin", "full_name": "Admin User", "role": C.ADMIN,
+              "districts": [], "active": True,
               "password_hash": generate_password_hash("admin123")},
-    "staff": {"username": "staff", "full_name": "Staff User", "role": "Back Office",
-              "district": "", "active": True,
+    "approver": {"username": "approver", "full_name": "Approver User", "role": C.APPROVER,
+                 "districts": [], "active": True,
+                 "password_hash": generate_password_hash("approver123")},
+    "staff": {"username": "staff", "full_name": "Staff User", "role": C.BACK_OFFICE,
+              "districts": [], "active": True,
               "password_hash": generate_password_hash("staff123")},
 }
 
@@ -105,10 +110,13 @@ def _normalise(r):
     r.setdefault("comments", [])
     r.setdefault("attachments", [])
     r.setdefault("archive_refs", [])
+    r.setdefault("history", [])
+    r.setdefault("guest_hidden", False)
+    r.setdefault("created_by", None)
     for k in ("participants", "details"):
         if r.get(k) is None:
             r[k] = {}
-    for k in ("tags", "comments", "attachments", "archive_refs"):
+    for k in ("tags", "comments", "attachments", "archive_refs", "history"):
         if r.get(k) is None:
             r[k] = []
     r["participants_total"] = r.get("participants_total") or 0
@@ -275,15 +283,25 @@ def migrate_files_to_b2(time_budget=20):
 # ─────────────────────────────────────────────
 # Users
 # ─────────────────────────────────────────────
+def _normalise_user(u):
+    u = dict(u)
+    u["role"] = C.ROLE_ALIASES.get(u.get("role"), u.get("role"))
+    districts = u.get("districts") or []
+    if not districts and u.get("district"):
+        districts = [u["district"]]     # accounts from before Phase 2
+    u["districts"] = list(districts)
+    return u
+
+
 def list_users():
     if supabase:
         try:
             res = supabase.table("app_users").select("*").order("username").execute()
-            return res.data or []
+            return [_normalise_user(u) for u in res.data or []]
         except Exception as e:
             log.exception("Supabase users read failed")
             raise StoreError(f"Could not read users: {e}")
-    return sorted(_USERS.values(), key=lambda u: u["username"])
+    return [_normalise_user(u) for u in sorted(_USERS.values(), key=lambda u: u["username"])]
 
 
 def get_user(username):
@@ -291,7 +309,7 @@ def get_user(username):
     users = list_users()
     if users:
         return next((u for u in users if u["username"] == username), None)
-    return DEMO_USERS.get(username)
+    return _normalise_user(DEMO_USERS[username]) if username in DEMO_USERS else None
 
 
 def demo_logins_active():
@@ -326,7 +344,49 @@ def save_user(user, is_new):
 # ─────────────────────────────────────────────
 # Backup and restore (whole database)
 # ─────────────────────────────────────────────
-BACKUP_TABLES = {"reports": "id", "app_users": "username"}
+# ─────────────────────────────────────────────
+# Settings (Admin › Settings)
+# ─────────────────────────────────────────────
+_settings_cache = {"at": 0.0, "value": None}
+SETTINGS_TTL = 20   # seconds; other server processes see a change within this time
+
+
+def get_settings():
+    """config.DEFAULT_SETTINGS overlaid with what the Admin saved."""
+    if _settings_cache["value"] is not None and time.time() - _settings_cache["at"] < SETTINGS_TTL:
+        return dict(_settings_cache["value"])
+    saved = {}
+    if supabase:
+        try:
+            res = supabase.table("app_settings").select("*").execute()
+            saved = {row["key"]: row["value"] for row in res.data or []}
+        except Exception:
+            # Table missing (supabase_phase2.sql not run yet): use the defaults
+            log.exception("Could not read settings")
+    else:
+        saved = dict(_SETTINGS)
+    value = {**C.DEFAULT_SETTINGS, **{k: v for k, v in saved.items() if k in C.DEFAULT_SETTINGS}}
+    _settings_cache.update(at=time.time(), value=value)
+    return dict(value)
+
+
+def save_settings(changes):
+    changes = {k: v for k, v in changes.items() if k in C.DEFAULT_SETTINGS}
+    if supabase:
+        try:
+            rows = [{"key": k, "value": v, "updated_at": now_iso()} for k, v in changes.items()]
+            supabase.table("app_settings").upsert(rows).execute()
+        except Exception as e:
+            log.exception("Settings save failed")
+            raise StoreError(f"Could not save settings: {e}")
+    else:
+        _SETTINGS.update(changes)
+    _settings_cache["value"] = None
+
+
+BACKUP_TABLES = {"reports": "id", "app_users": "username", "app_settings": "key"}
+# Backups made before Phase 2 have no app_settings
+OPTIONAL_BACKUP_TABLES = {"app_settings"}
 
 
 def dump_tables():
@@ -336,21 +396,28 @@ def dump_tables():
         try:
             for table, order in BACKUP_TABLES.items():
                 rows, start, page = [], 0, 1000
-                while True:
-                    res = (supabase.table(table).select("*").order(order)
-                           .range(start, start + page - 1).execute())
-                    batch = res.data or []
-                    rows.extend(batch)
-                    if len(batch) < page:
-                        break
-                    start += page
+                try:
+                    while True:
+                        res = (supabase.table(table).select("*").order(order)
+                               .range(start, start + page - 1).execute())
+                        batch = res.data or []
+                        rows.extend(batch)
+                        if len(batch) < page:
+                            break
+                        start += page
+                except Exception:
+                    if table in OPTIONAL_BACKUP_TABLES:
+                        log.warning("Backup: table %s not found, skipped", table)
+                        continue
+                    raise
                 tables[table] = rows
         except Exception as e:
             log.exception("Backup read failed")
             raise StoreError(f"Could not read the database for backup: {e}")
     else:
         tables = {"reports": [dict(r) for r in sorted(_REPORTS, key=lambda r: r["id"])],
-                  "app_users": [dict(u) for u in sorted(_USERS.values(), key=lambda u: u["username"])]}
+                  "app_users": [dict(u) for u in sorted(_USERS.values(), key=lambda u: u["username"])],
+                  "app_settings": [{"key": k, "value": v} for k, v in sorted(_SETTINGS.items())]}
     return {"app": "disha-mis", "version": 1, "created_at": now_iso(),
             "backend": BACKEND, "tables": tables}
 
@@ -360,9 +427,11 @@ def validate_backup(payload):
         raise StoreError("This file is not a DISHA MIS backup.")
     tables = payload.get("tables") or {}
     for t in BACKUP_TABLES:
+        if t in OPTIONAL_BACKUP_TABLES and t not in tables:
+            continue
         if not isinstance(tables.get(t), list):
             raise StoreError(f"The backup is missing the '{t}' table.")
-    return {t: len(tables[t]) for t in BACKUP_TABLES}
+    return {t: len(tables[t]) for t in BACKUP_TABLES if t in tables}
 
 
 def restore_tables(payload):
@@ -378,4 +447,8 @@ def restore_tables(payload):
     _REPORTS[:] = [dict(r) for r in payload["tables"]["reports"]]
     _USERS.clear()
     _USERS.update({u["username"]: dict(u) for u in payload["tables"]["app_users"]})
+    if "app_settings" in payload["tables"]:
+        _SETTINGS.clear()
+        _SETTINGS.update({row["key"]: row["value"] for row in payload["tables"]["app_settings"]})
+    _settings_cache["value"] = None
     return counts

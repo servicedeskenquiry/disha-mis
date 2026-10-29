@@ -1,12 +1,26 @@
 {% extends "base.html" %}
-{% block title_suffix %} – Submit Report{% endblock %}
-{% block topbar_title %}<span data-t>Submit Report</span>{% endblock %}
+{% block title_suffix %} – {{ 'Edit Report #' ~ report.id if report else 'Submit Report' }}{% endblock %}
+{% block topbar_title %}{% if report %}<span data-t>Edit Report</span> #{{ report.id }}{% else %}<span data-t>Submit Report</span>{% endif %}{% endblock %}
 
 {% block content %}
+{% set R = report or {} %}
+{% set P = R.get('participants') or {} %}
+{% set D = R.get('details') or {} %}
+{% if report %}
+<div class="page-sub"><a href="{{ url_for('report_detail', report_id=report.id) }}" data-t>← Back to report</a></div>
+{% if report.status in C.RETURNED_STATUSES %}
+{% set last = (report.comments|selectattr('kind', 'in', ['query', 'reject'])|list)[-1:] %}
+<div class="returned-note {{ 'query' if report.status == 'Query' else 'reject' }}">
+  <strong>{{ '💬' if report.status == 'Query' else '❌' }} <span data-t>{{ C.STATUS_LABEL[report.status] }}</span></strong>
+  {% if last %} · {{ last[0].by }}: “{{ last[0].text }}”{% endif %}
+</div>
+{% endif %}
+{% else %}
 <div class="page-sub" data-t>Select report type and fill in the details</div>
+{% endif %}
 
 <!-- STEP 1: Choose report type -->
-<div id="step1">
+<div id="step1" {% if report %}style="display:none"{% endif %}>
   <div class="steps">
     <div class="step active"><div class="step-dot">1</div><span data-t>Choose Type</span></div>
     <div class="step-line"></div>
@@ -45,7 +59,7 @@
     <div class="step"><div class="step-dot">4</div><span data-t>Submit</span></div>
   </div>
 
-  <form method="POST" action="{{ url_for('submit') }}" enctype="multipart/form-data" id="report-form">
+  <form method="POST" action="{{ url_for('report_edit', report_id=report.id) if report else url_for('submit') }}" enctype="multipart/form-data" id="report-form">
     <div class="card">
       <div class="form-head">
         <div style="display:flex;align-items:center;gap:10px">
@@ -55,7 +69,7 @@
             <div style="font-size:12px;color:var(--muted)" data-t>Fill all required fields (*)</div>
           </div>
         </div>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="goBack()" data-t>← Change type</button>
+        {% if not report %}<button type="button" class="btn btn-secondary btn-sm" onclick="goBack()" data-t>← Change type</button>{% endif %}
       </div>
 
       <input type="hidden" name="rtype" id="rtype-input" value="daily">
@@ -66,55 +80,55 @@
           <label for="f-district"><span data-t>Active District</span> *</label>
           <select name="district" id="f-district" required>
             <option value="" data-t>-- Select --</option>
-            {% for d in C.DISTRICTS %}<option value="{{ d }}" data-t>{{ d }}</option>{% endfor %}
-            <option value="{{ C.HEAD_OFFICE }}" class="periodic-only" data-t>{{ C.HEAD_OFFICE }}</option>
+            {% for d in C.DISTRICTS %}<option value="{{ d }}" {% if R.get('district') == d %}selected{% endif %} data-t>{{ d }}</option>{% endfor %}
+            <option value="{{ C.HEAD_OFFICE }}" class="periodic-only" {% if R.get('district') == C.HEAD_OFFICE %}selected{% endif %} data-t>{{ C.HEAD_OFFICE }}</option>
           </select>
         </div>
         <div class="fg2">
           <label for="f-activity"><span data-t>Activity Type</span> *</label>
           <select name="activity" id="f-activity" required onchange="showTemplate(this.value)">
             <option value="" data-t>-- Select --</option>
-            <option value="{{ C.CONSOLIDATED }}" class="periodic-only" data-t>{{ C.CONSOLIDATED }}</option>
-            {% for a in C.ACTIVITY_NAMES %}<option value="{{ a }}" data-t>{{ a }}</option>{% endfor %}
+            <option value="{{ C.CONSOLIDATED }}" class="periodic-only" {% if R.get('activity') == C.CONSOLIDATED %}selected{% endif %} data-t>{{ C.CONSOLIDATED }}</option>
+            {% for a in C.ACTIVITY_NAMES %}<option value="{{ a }}" {% if R.get('activity') == a %}selected{% endif %} data-t>{{ a }}</option>{% endfor %}
           </select>
         </div>
 
         <!-- Date (Daily) / Period (periodic reports) -->
         <div class="fg2 period-group" data-for="daily">
           <label for="f-date"><span data-t>Date</span> *</label>
-          <input type="date" name="activity_date" id="f-date" max="{{ today.isoformat() }}">
+          <input type="date" name="activity_date" id="f-date" max="{{ today.isoformat() }}" value="{{ R.get('activity_date') or '' }}">
         </div>
         <div class="fg2 period-group" data-for="monthly">
           <label><span data-t>Period</span> *</label>
           <div class="period-row">
             <select name="month">
-              {% for m in C.FY_MONTHS %}<option value="{{ m }}" {% if m == today.month %}selected{% endif %} data-t>{{ C.MONTHS[m-1] }}</option>{% endfor %}
+              {% for m in C.FY_MONTHS %}<option value="{{ m }}" {% if m == (R.get('month') or today.month) %}selected{% endif %} data-t>{{ C.MONTHS[m-1] }}</option>{% endfor %}
             </select>
-            <select name="fy">{% for y in fys %}<option value="{{ y }}" {% if y == current_fy %}selected{% endif %}>{{ fy_label(y) }}</option>{% endfor %}</select>
+            <select name="fy">{% for y in fys %}<option value="{{ y }}" {% if y == (R.get('fy') or current_fy) %}selected{% endif %}>{{ fy_label(y) }}</option>{% endfor %}</select>
           </div>
         </div>
         <div class="fg2 period-group" data-for="quarterly">
           <label><span data-t>Period</span> *</label>
           <div class="period-row">
-            <select name="quarter">{% for q in C.QUARTERS %}<option value="{{ loop.index }}" data-t>{{ q }}</option>{% endfor %}</select>
-            <select name="fy">{% for y in fys %}<option value="{{ y }}" {% if y == current_fy %}selected{% endif %}>{{ fy_label(y) }}</option>{% endfor %}</select>
+            <select name="quarter">{% for q in C.QUARTERS %}<option value="{{ loop.index }}" {% if R.get('quarter') == loop.index %}selected{% endif %} data-t>{{ q }}</option>{% endfor %}</select>
+            <select name="fy">{% for y in fys %}<option value="{{ y }}" {% if y == (R.get('fy') or current_fy) %}selected{% endif %}>{{ fy_label(y) }}</option>{% endfor %}</select>
           </div>
         </div>
         <div class="fg2 period-group" data-for="halfyearly">
           <label><span data-t>Period</span> *</label>
           <div class="period-row">
-            <select name="half">{% for h in C.HALVES %}<option value="{{ loop.index }}" data-t>{{ h }}</option>{% endfor %}</select>
-            <select name="fy">{% for y in fys %}<option value="{{ y }}" {% if y == current_fy %}selected{% endif %}>{{ fy_label(y) }}</option>{% endfor %}</select>
+            <select name="half">{% for h in C.HALVES %}<option value="{{ loop.index }}" {% if R.get('half') == loop.index %}selected{% endif %} data-t>{{ h }}</option>{% endfor %}</select>
+            <select name="fy">{% for y in fys %}<option value="{{ y }}" {% if y == (R.get('fy') or current_fy) %}selected{% endif %}>{{ fy_label(y) }}</option>{% endfor %}</select>
           </div>
         </div>
         <div class="fg2 period-group" data-for="annual">
           <label><span data-t>Period</span> *</label>
-          <select name="fy">{% for y in fys %}<option value="{{ y }}" {% if y == current_fy %}selected{% endif %}>{{ fy_label(y) }}</option>{% endfor %}</select>
+          <select name="fy">{% for y in fys %}<option value="{{ y }}" {% if y == (R.get('fy') or current_fy) %}selected{% endif %}>{{ fy_label(y) }}</option>{% endfor %}</select>
         </div>
 
         <div class="fg2">
           <label for="f-loc" data-t>Location / Venue</label>
-          <input type="text" name="location" id="f-loc" placeholder="Village, Block" data-tp>
+          <input type="text" name="location" id="f-loc" placeholder="Village, Block" data-tp value="{{ R.get('location') or '' }}">
         </div>
       </div>
 
@@ -128,9 +142,9 @@
             <div class="fg2 {% if fd.type == 'textarea' %}full{% endif %}">
               <label data-t>{{ fd.label }}</label>
               {% if fd.type == 'textarea' %}
-                <textarea name="d_{{ fd.key }}" style="min-height:60px"></textarea>
+                <textarea name="d_{{ fd.key }}" style="min-height:60px">{{ D.get(fd.key, '') if R.get('activity') == name else '' }}</textarea>
               {% else %}
-                <input type="{{ 'number' if fd.type == 'number' else 'text' }}" name="d_{{ fd.key }}" {% if fd.type == 'number' %}min="0"{% endif %}>
+                <input type="{{ 'number' if fd.type == 'number' else 'text' }}" name="d_{{ fd.key }}" {% if fd.type == 'number' %}min="0"{% endif %} value="{{ D.get(fd.key, '') if R.get('activity') == name else '' }}">
               {% endif %}
             </div>
             {% endfor %}
@@ -143,7 +157,7 @@
       <div class="sec-div" data-t>🏷️ Issue Tags</div>
       <div class="chip-group">
         {% for t in C.ISSUE_TAGS %}
-        <label class="chip"><input type="checkbox" name="tags" value="{{ t }}"><span data-t>{{ t }}</span></label>
+        <label class="chip"><input type="checkbox" name="tags" value="{{ t }}" {% if t in (R.get('tags') or []) %}checked{% endif %}><span data-t>{{ t }}</span></label>
         {% endfor %}
       </div>
 
@@ -152,14 +166,14 @@
       <div class="participants">
         <div class="fg2 p-total">
           <label for="p-total" data-t>Total Participants</label>
-          <input type="number" name="p_total" id="p-total" min="0" placeholder="e.g. 45" data-tp>
+          <input type="number" name="p_total" id="p-total" min="0" placeholder="e.g. 45" data-tp value="{{ P.get('total', '') }}">
         </div>
         <div class="p-hint" data-t>Tick the categories that apply and enter the number for each.</div>
         <div class="p-grid">
           {% for c in C.PARTICIPANT_CATEGORIES %}
           <div class="p-item">
-            <label class="p-check"><input type="checkbox" name="pcat" value="{{ c.key }}" onchange="togglePcat(this)"><span data-t>{{ c.label }}</span></label>
-            <input type="number" name="p_{{ c.key }}" min="0" disabled placeholder="0">
+            <label class="p-check"><input type="checkbox" name="pcat" value="{{ c.key }}" onchange="togglePcat(this)" {% if c.key in P %}checked{% endif %}><span data-t>{{ c.label }}</span></label>
+            <input type="number" name="p_{{ c.key }}" min="0" {% if c.key not in P %}disabled{% endif %} placeholder="0" value="{{ P.get(c.key, '') }}">
           </div>
           {% endfor %}
         </div>
@@ -168,15 +182,15 @@
       <div class="form-grid" style="margin-top:12px">
         <div class="fg2 full">
           <label for="f-desc"><span data-t>Description</span> *</label>
-          <textarea name="description" id="f-desc" required placeholder="Describe activity, outcomes and key observations..." data-tp></textarea>
+          <textarea name="description" id="f-desc" required placeholder="Describe activity, outcomes and key observations..." data-tp>{{ R.get('description') or '' }}</textarea>
         </div>
         <div class="fg2">
           <label for="f-remarks" data-t>Remarks</label>
-          <textarea name="remarks" id="f-remarks" placeholder="Follow-up actions..." style="min-height:55px" data-tp></textarea>
+          <textarea name="remarks" id="f-remarks" placeholder="Follow-up actions..." style="min-height:55px" data-tp>{{ R.get('remarks') or '' }}</textarea>
         </div>
         <div class="fg2">
           <label for="f-by" data-t>Submitted by</label>
-          <input type="text" name="submitted_by" id="f-by" value="{{ session.get('display_name', '') }}">
+          <input type="text" name="submitted_by" id="f-by" value="{{ R.get('submitted_by') or session.get('display_name', '') }}">
         </div>
       </div>
 
@@ -185,6 +199,13 @@
         <span data-t>📎 Attachments</span>
         <span class="attach-count"><span id="attach-count">0</span> / {{ C.MAX_ATTACHMENTS }}</span>
       </div>
+      {% if report and (report.attachments or report.archive_refs) %}
+      <div class="keep-files">
+        <div class="hint" style="margin:0" data-t>Files already attached. Untick a file to remove it from this report.</div>
+        {% for a in report.attachments %}<label><input type="checkbox" name="keep_file" value="a{{ loop.index0 }}" checked onchange="updateAttachCount()"> 📎 {{ a.name }}</label>{% endfor %}
+        {% for a in report.archive_refs %}<label><input type="checkbox" name="keep_file" value="r{{ loop.index0 }}" checked onchange="updateAttachCount()"> ↗ {{ a.name }} (#{{ a.report_id }})</label>{% endfor %}
+      </div>
+      {% endif %}
       <div class="attach-grid">
         {% for cat in C.ATTACHMENT_CATEGORIES %}
         <div>
@@ -219,8 +240,24 @@
         </div>
       </details>
 
+      {% if report %}
+      <div class="form-grid" style="margin-top:14px">
+        <div class="fg2 full">
+          <label for="f-note" data-t>{{ 'Your answer to the query / what you corrected' if report.status in C.RETURNED_STATUSES else 'What did you change? (saved in the history)' }}{% if report.status in C.RETURNED_STATUSES and role == C.BACK_OFFICE %} *{% endif %}</label>
+          <textarea name="change_note" id="f-note" style="min-height:55px" {% if report.status in C.RETURNED_STATUSES and role == C.BACK_OFFICE %}required{% endif %}></textarea>
+        </div>
+      </div>
+      {% if is_admin and report.status in C.RETURNED_STATUSES %}
+      <label class="setting-row" style="border:none"><input type="checkbox" name="resubmit" value="1" checked> <span data-t>Mark as Resubmitted (send back to the Approver)</span></label>
+      {% endif %}
+      {% endif %}
       <div class="btn-group">
+        {% if report %}
+        <button type="submit" class="btn btn-primary">{{ '📤' }} <span data-t>{{ 'Resubmit for Approval' if report.status in C.RETURNED_STATUSES else 'Save Changes' }}</span></button>
+        <a href="{{ url_for('report_detail', report_id=report.id) }}" class="btn btn-secondary" data-t>Cancel</a>
+        {% else %}
         <button type="submit" class="btn btn-primary" data-t>📤 Submit for Approval</button>
+        {% endif %}
       </div>
     </div>
   </form>
@@ -238,6 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const card = document.querySelector(`.rtype-card[data-rtype="${preset}"]`);
     if (card) selectType(preset, card, true);
   }
+  updateAttachCount();
 });
 </script>
 {% endblock %}

@@ -123,7 +123,8 @@ def dashboard(reports, today=None):
         "fy_label": fy_label(fy),
         "total": total,
         "this_month": len(this_month),
-        "pending": status.get("Pending", 0),
+        "pending": sum(status.get(s, 0) for s in C.REVIEW_STATUSES),
+        "returned": sum(status.get(s, 0) for s in C.RETURNED_STATUSES),
         "approved": status.get("Approved", 0),
         "approval_rate": round(100 * status.get("Approved", 0) / total) if total else 0,
         "active_districts": len(C.DISTRICTS),
@@ -132,7 +133,7 @@ def dashboard(reports, today=None):
         "charts": {
             "monthly": {"labels": [C.MONTHS_SHORT[m - 1] for m in fy_months],
                         "data": list(fy_months.values())},
-            "status": {"labels": C.STATUSES,
+            "status": {"labels": [C.STATUS_LABEL[s] for s in C.STATUSES],
                        "data": [status.get(s, 0) for s in C.STATUSES]},
             "district": {"labels": C.PERIODIC_DISTRICTS,
                          "data": [by_district.get(d, 0) for d in C.PERIODIC_DISTRICTS]},

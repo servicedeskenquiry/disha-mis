@@ -5,16 +5,19 @@
 {% block content %}
 {% if session.get('mode') == 'admin' %}
   {% include '_reports_tabs.html' %}
-  {% with hide=(['rtype'] if filters.get('rtype') else []) %}{% include '_filters.html' %}{% endwith %}
+{% endif %}
+  {% with hide=(['rtype'] if filters.get('rtype') else []) + (['status'] if session.get('mode') == 'guest' else []) %}{% include '_filters.html' %}{% endwith %}
 
   <div class="list-head">
     <div class="page-sub" style="margin:0">{{ reports|length }} <span data-t>reports</span> · <span data-t>Click any row to view details</span></div>
+    {% if can_download %}
     <div class="export-btns">
       <span data-t>Download</span>:
       {% for fmt, label in [('docx','Word'),('xlsx','Excel'),('pptx','PPT'),('pdf','PDF')] %}
       <a class="btn btn-secondary btn-sm" href="{{ url_for('export_file', fmt=fmt, **filters) }}">{{ label }}</a>
       {% endfor %}
     </div>
+    {% endif %}
   </div>
 
   {% if tracker %}
@@ -48,12 +51,12 @@
     </div>
   </div>
   {% endif %}
-{% else %}
-  <div class="page-sub" data-t>Showing public reports only — log in to view all</div>
+{% if session.get('mode') == 'guest' %}
+  <div class="page-sub" data-t>Guest view: approved reports only</div>
 {% endif %}
 
-<div class="blur-wrap">
-  <div {% if session.get('mode') == 'guest' %}style="filter:blur(3px);pointer-events:none"{% endif %}>
+<div>
+  <div>
     <div class="card" style="padding:0;overflow:hidden">
       <div class="table-scroll">
       <table>
@@ -71,8 +74,7 @@
         </thead>
         <tbody>
           {% for r in reports %}
-          <tr class="clickable"
-            {% if session.get('mode') == 'admin' %}onclick="window.location='{{ url_for('report_detail', report_id=r.id) }}'"{% endif %}>
+          <tr class="clickable" onclick="window.location='{{ url_for('report_detail', report_id=r.id) }}'">
             <td><strong>#{{ r.id }}</strong></td>
             <td data-t>{{ r.district }}</td>
             <td style="max-width:220px" data-t>{{ r.activity }}</td>
@@ -80,7 +82,7 @@
             <td>{{ r.period }}</td>
             <td>{{ r.participants_total or '—' }}</td>
             <td>{% for t in r.tags %}<span class="tag" data-t>{{ t }}</span>{% endfor %}</td>
-            <td><span class="pill pill-{{ r.status|lower }}" data-t>{{ r.status }}</span>{% if r.comments %} <span title="Has comments">💬</span>{% endif %}</td>
+            <td><span class="pill pill-{{ r.status|lower }}" data-t>{{ C.STATUS_LABEL.get(r.status, r.status) }}</span>{% if r.comments %} <span title="Has comments">💬</span>{% endif %}</td>
           </tr>
           {% else %}
           <tr><td colspan="8" class="empty" data-t>No reports found.</td></tr>
@@ -91,15 +93,5 @@
     </div>
   </div>
 
-  {% if session.get('mode') == 'guest' %}
-  <div class="blur-over">
-    <div class="blur-box">
-      <div style="font-size:28px;margin-bottom:6px">🔒</div>
-      <div style="font-size:14px;font-weight:600;margin-bottom:4px" data-t>Login Required</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px" data-t>Log in to view all reports and details.</div>
-      <a href="{{ url_for('login') }}" class="btn btn-primary" style="width:100%;justify-content:center" data-t>Log In Now</a>
-    </div>
-  </div>
-  {% endif %}
 </div>
 {% endblock %}

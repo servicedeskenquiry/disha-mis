@@ -132,7 +132,8 @@ onChartsReady(() => {
   barChart('monthChart', DASH.monthly.labels, [{label: 'Reports', data: DASH.monthly.data}]);
   doughnutChart('statusChart', DASH.status.labels, DASH.status.data, ['#e67e00', '#1a5fa8', '#c0392b', '#7b2fa8', '#2d9e65']);
   barChart('districtChart', DASH.district.labels, [{label: 'Reports', data: DASH.district.data, color: 'rgba(26,95,168,.75)'}], {horizontal: true});
-  barChart('activityChart', DASH.activity.labels, [{label: 'Reports', data: DASH.activity.data, color: 'rgba(184,120,0,.75)'}], {wrapLabels: true});
+  const ASHORT = {{ C.ACTIVITY_SHORT|tojson }};
+  barChart('activityChart', DASH.activity.labels.map(l => ASHORT[l] || l), [{label: 'Reports', data: DASH.activity.data, color: 'rgba(184,120,0,.75)'}], {wrapLabels: true});
 });
 </script>
 {% endblock %}

@@ -6,7 +6,7 @@
 <title>DISHA MIS – Login</title>
 <link rel="icon" type="image/png" href="{{ url_for('static', filename=C.FAVICON_FILE) }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&display=swap">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -22,6 +22,7 @@
     <div class="lang-toggle-login">
       <button class="ltl-btn" data-lang="en" onclick="setLang('en')">English</button>
       <button class="ltl-btn" data-lang="bn" onclick="setLang('bn')">বাংলা</button>
+          <button class="ltl-btn" data-lang="hi" onclick="setLang('hi')">हिन्दी</button>
     </div>
     <h2 data-t>Sign in</h2>
     <p data-t>Sign in to your account or continue as guest</p>
@@ -68,6 +69,7 @@
 function pickTab(el){document.querySelectorAll('.login-tab').forEach(b=>b.classList.toggle('active',b===el));}
 </script>
 <script src="{{ url_for('static', filename='js/i18n_bn.js') }}"></script>
+<script src="{{ url_for('static', filename='js/i18n_hi.js') }}"></script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

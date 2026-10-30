@@ -178,6 +178,10 @@ def insert_report(data):
 
 
 def update_report(report_id, changes):
+    changes = dict(changes)
+    # Full precision, so two changes in the same second still count as two
+    # for the "new updates" notice
+    changes["updated_at"] = datetime.now(timezone.utc).isoformat()
     if supabase:
         try:
             res = supabase.table("reports").update(changes).eq("id", report_id).execute()
@@ -201,6 +205,28 @@ def update_report(report_id, changes):
 # ─────────────────────────────────────────────
 # Attachments
 # ─────────────────────────────────────────────
+def change_stamp():
+    """A short text that changes whenever any report is added, edited or
+    reviewed. Two tiny queries, so pages can ask for it every minute."""
+    if supabase:
+        try:
+            newest = (supabase.table("reports").select("id", count="exact")
+                      .order("id", desc=True).limit(1).execute())
+            # (the filter skips empty dates, which Postgres would sort first)
+            touched = (supabase.table("reports").select("updated_at")
+                       .gte("updated_at", "2000-01-01")
+                       .order("updated_at", desc=True).limit(1).execute())
+            max_id = newest.data[0]["id"] if newest.data else 0
+            last = touched.data[0].get("updated_at") if touched.data else ""
+            return f"{newest.count or 0}|{max_id}|{last or ''}"
+        except Exception as e:
+            log.exception("Supabase read failed")
+            raise StoreError(f"Could not check for updates: {e}")
+    max_id = max((r["id"] for r in _REPORTS), default=0)
+    last = max((r.get("updated_at") or "" for r in _REPORTS), default="")
+    return f"{len(_REPORTS)}|{max_id}|{last}"
+
+
 def save_file(filename, content, content_type):
     """Store a file and return (url, path, storage).
 

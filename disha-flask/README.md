@@ -80,7 +80,7 @@ Everything the client may revise is in **`config.py`**:
 | `MAX_ATTACHMENTS`, `MAX_FILE_MB` | 10 files per report, 25 MB each |
 | `LOGO_FILE`, `FAVICON_FILE` | Official DISHA green-leaf logo in `static/img/` |
 
-Bengali text lives in `static/js/i18n_bn.js`, keyed by the English text. Add a line there for any new label.
+Bengali text lives in `static/js/i18n_bn.js` and Hindi in `static/js/i18n_hi.js`, both keyed by the English text. Add a line to both for any new label.
 
 ---
 
@@ -101,6 +101,7 @@ supabase_lockdown.sql Removes open policies, adds disha_restore()
 supabase_seed.sql    Optional demo data
 static/js/main.js    Language switch, charts (values printed on charts), submit form
 static/js/i18n_bn.js Bengali translations
+static/js/i18n_hi.js Hindi translations
 static/js/vendor/    Chart.js 4.4.1 + chartjs-plugin-datalabels 2.2.0 (bundled, no CDN)
 templates/
   home.html              Welcome page: org name, logo, 5 sections, language switch
@@ -138,6 +139,6 @@ Old accounts with the role `Super Admin` are treated as Admin.
 
 ## Known limitations
 
-- PDF export uses standard fonts, so Bengali text typed into reports will not render in the PDF. Word, Excel and PowerPoint exports handle Bengali fine.
+- PDF export uses standard fonts, so Bengali or Hindi text typed into reports will not render in the PDF. Word, Excel and PowerPoint exports handle both fine.
 - Report period labels (e.g. "September 2026") are stored in English and are not translated on screen.
 - "Save Draft" was removed because it did not save anything. It can be added properly later.

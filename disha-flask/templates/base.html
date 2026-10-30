@@ -6,7 +6,7 @@
 <title>DISHA MIS{% block title_suffix %}{% endblock %}</title>
 <link rel="icon" type="image/png" href="{{ url_for('static', filename=C.FAVICON_FILE) }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&display=swap">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 <script src="{{ url_for('static', filename='js/vendor/chart.umd.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/vendor/chartjs-plugin-datalabels.min.js') }}"></script>
@@ -123,6 +123,7 @@
         <div class="lang-switch">
           <button class="lang-btn" data-lang="en" onclick="setLang('en')">English</button>
           <button class="lang-btn" data-lang="bn" onclick="setLang('bn')">বাংলা</button>
+          <button class="lang-btn" data-lang="hi" onclick="setLang('hi')">हिन्दी</button>
         </div>
         {% if mode != 'admin' %}
           <a href="{{ url_for('login') }}" class="btn-sw btn-sw-admin" data-t>🔑 Log In</a>
@@ -139,6 +140,14 @@
 
       {% if insecure_db and can_manage_users %}
         <div class="flash-warn">⚠ <span data-t>Security setup is not finished: the app is still using the public database key. Add SUPABASE_SERVICE_KEY in Render, then run supabase_lockdown.sql.</span></div>
+      {% endif %}
+
+      {% if session.get('role') %}
+        <div class="live-bar" id="live-bar" data-url="{{ url_for('api_updates') }}" hidden>
+          🔔 <span data-t>New updates are available.</span>
+          <button class="live-btn" onclick="location.reload()" data-t>Refresh</button>
+          <button class="live-x" onclick="this.parentNode.hidden=true" title="Close">✕</button>
+        </div>
       {% endif %}
 
       {% block content %}{% endblock %}
@@ -159,6 +168,7 @@
 <div class="toast" id="toast">✅ <span id="toast-msg"></span></div>
 
 <script src="{{ url_for('static', filename='js/i18n_bn.js') }}"></script>
+<script src="{{ url_for('static', filename='js/i18n_hi.js') }}"></script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 {% block extra_js %}{% endblock %}
 </body>

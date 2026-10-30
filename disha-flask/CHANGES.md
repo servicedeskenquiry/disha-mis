@@ -1,3 +1,17 @@
+# Phase 5: Hindi, live updates, final test (revised module, 30.10.2026)
+
+No database change: just upload the code.
+
+| Item | Where |
+|---|---|
+| Hindi as a third language next to English and Bengali, on every page including login and home; Devanagari font | `static/js/i18n_hi.js`, `main.js` `tr()` |
+| "New updates are available. Refresh" notice: each open page checks once a minute (only while the tab is visible) whether any report the user can see was added, edited, reviewed or commented on. Not shown on the report form | `/api/updates`, `store.change_stamp`, `initLiveUpdates` |
+| Every report change now stamps `updated_at` (to the microsecond), including comments and guest visibility | `store.update_report` |
+| Fixed: on a computer, the Reports dashboard was wider than the screen because of the district × month table | `style.css` (`.main{min-width:0}`) |
+| Dashboard activity chart uses short activity names so labels no longer overlap | `dashboard.html` |
+| Missing Bengali/Hindi words added (permissions table, short activity names) | `i18n_bn.js`, `i18n_hi.js` |
+| Full test: 4 roles × computer and phone × English and Hindi, 108 page visits, no errors | |
+
 # Phase 4: issue tracking and report linking (revised module sections 7, 8 and 11, 30.10.2026)
 
 No database change: just upload the code.

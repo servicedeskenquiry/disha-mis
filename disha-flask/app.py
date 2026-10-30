@@ -1,3 +1,4 @@
+import hashlib
 import hmac
 import io
 import logging
@@ -1293,6 +1294,23 @@ def cron_nightly():
 @login_required
 def api_reports():
     return jsonify(A.filter_reports(load_reports(), **A.read_filters(request.args)))
+
+
+@app.route("/api/updates")
+@login_required
+def api_updates():
+    """For the "New updates" notice. The cheap stamp is checked first; only
+    when it moved do we work out whether anything this user can see changed."""
+    try:
+        stamp = store.change_stamp()
+    except StoreError:
+        return jsonify({"ok": False})
+    if stamp == request.args.get("stamp"):
+        return jsonify({"ok": True, "stamp": stamp, "fp": request.args.get("fp", "")})
+    seen = sorted(f"{r['id']}:{r.get('status')}:{r.get('updated_at') or ''}:"
+                  f"{len(r.get('comments') or [])}" for r in load_reports())
+    fp = hashlib.sha1("|".join(seen).encode()).hexdigest()[:16]
+    return jsonify({"ok": True, "stamp": stamp, "fp": fp})
 
 
 @app.route("/api/check-duplicates", methods=["POST"])

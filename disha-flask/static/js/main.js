@@ -12,15 +12,17 @@ let lang = 'en';
 try { lang = localStorage.getItem('disha_lang') || 'en'; } catch (e) {}
 
 function tr(s) {
-  if (lang !== 'bn' || typeof BN === 'undefined') return s;
-  return BN[s] !== undefined ? BN[s] : s;
+  const d = lang === 'bn' ? (typeof BN !== 'undefined' ? BN : null)
+          : lang === 'hi' ? (typeof HI !== 'undefined' ? HI : null) : null;
+  if (!d) return s;
+  return d[s] !== undefined ? d[s] : s;
 }
 const T = tr;
 
 function setLang(l) {
   lang = l;
   try { localStorage.setItem('disha_lang', l); } catch (e) {}
-  document.documentElement.lang = l === 'bn' ? 'bn' : 'en';
+  document.documentElement.lang = (l === 'bn' || l === 'hi') ? l : 'en';
   document.querySelectorAll('[data-lang]').forEach(b => b.classList.toggle('active', b.dataset.lang === l));
   applyTranslations();
   refreshCharts();
@@ -221,7 +223,7 @@ const CHARTS = [];   // {chart, labels, datasets}
 function onChartsReady(fn) {
   if (typeof Chart === 'undefined') return;
   if (typeof ChartDataLabels !== 'undefined') Chart.register(ChartDataLabels);
-  Chart.defaults.font.family = "'Segoe UI', 'Noto Sans Bengali', sans-serif";
+  Chart.defaults.font.family = "'Segoe UI', 'Noto Sans Bengali', 'Noto Sans Devanagari', sans-serif";
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
   else fn();
 }
@@ -351,9 +353,37 @@ function refreshCharts() {
   });
 }
 
+// ── Live updates ──
+// Every minute (while the tab is open and visible) ask the server whether
+// any report this user can see has changed, and offer a refresh if so.
+// Skipped on the report form, where a refresh would lose typing.
+const LIVE_EVERY_MS = 60000;
+function initLiveUpdates() {
+  const bar = document.getElementById('live-bar');
+  if (!bar || document.getElementById('report-form')) return;
+  let stamp = '', fp = '', base = null, timer = null;
+  async function check() {
+    if (document.hidden) return;
+    try {
+      const q = new URLSearchParams({ stamp, fp });
+      const res = await fetch(bar.dataset.url + '?' + q, { headers: { 'Accept': 'application/json' } });
+      if (!res.ok || !(res.headers.get('content-type') || '').includes('json')) { clearInterval(timer); return; }
+      const d = await res.json();
+      if (!d.ok) return;
+      stamp = d.stamp; fp = d.fp;
+      if (base === null) base = fp;
+      else if (fp !== base) { bar.hidden = false; clearInterval(timer); }
+    } catch (e) { /* offline for a moment: try again next time */ }
+  }
+  check();
+  timer = setInterval(check, LIVE_EVERY_MS);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+}
+
 // ── Page init ──
 document.addEventListener('DOMContentLoaded', () => {
   setLang(lang);
+  initLiveUpdates();
 
   // Drag & drop onto upload zones
   document.querySelectorAll('.upload-zone').forEach(uz => {

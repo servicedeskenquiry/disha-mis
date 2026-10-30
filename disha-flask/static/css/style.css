@@ -58,7 +58,7 @@ body{font-family:'Segoe UI','Noto Sans Bengali',sans-serif;background:var(--bg);
 .btn-logout:hover{background:rgba(255,255,255,.13);color:#fff}
 
 /* ── MAIN ── */
-.main{flex:1;margin-left:220px;display:flex;flex-direction:column;min-height:100vh}
+.main{flex:1;margin-left:220px;display:flex;flex-direction:column;min-height:100vh;min-width:0}
 .topbar{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:sticky;top:0;z-index:40}
 .topbar-left{display:flex;align-items:center;gap:10px}
 .topbar-title{font-size:15px;font-weight:600}
@@ -200,6 +200,7 @@ tr.clickable:hover td{background:#f0f9f4;cursor:pointer}
 
 /* ══════════ v2 additions (client review 28.09.2026) ══════════ */
 html[lang=bn] body{font-family:'Noto Sans Bengali','Segoe UI',sans-serif}
+html[lang=hi] body{font-family:'Noto Sans Devanagari','Segoe UI',sans-serif}
 
 /* Welcome / section selection page */
 .home-body{background:linear-gradient(160deg,#f3f7f5 0%,#e3f1e9 100%);min-height:100vh;display:flex;flex-direction:column}
@@ -406,3 +407,12 @@ table.compact td{padding:6px 10px;font-size:13px}
 .linked-stats{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
 .linked-stats .mini-stat{min-width:110px}
 .part-of a{margin-right:6px}
+
+/* Live updates notice */
+.live-bar{position:sticky;top:8px;z-index:50;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff8e1;border:1px solid #f3d27a;color:#6b4e00;border-radius:10px;padding:10px 14px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.08);font-weight:500}
+.live-bar[hidden]{display:none}
+.live-btn{background:var(--green);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer}
+.live-x{margin-left:auto;background:none;border:none;font-size:15px;cursor:pointer;color:#6b4e00}
+/* Wide tables scroll inside their card instead of stretching the page */
+.content{min-width:0}
+.charts-row>*,.stats-row>*,.form-grid>*{min-width:0}

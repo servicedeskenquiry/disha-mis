@@ -57,7 +57,7 @@ def is_activity(r):
 # ─────────────────────────────────────────────
 # Filters (shared by every page – tag filter works everywhere)
 # ─────────────────────────────────────────────
-FILTER_KEYS = ("rtype", "status", "district", "tag", "activity", "fy", "month", "q")
+FILTER_KEYS = ("rtype", "status", "district", "tag", "subject", "activity", "fy", "month", "q")
 
 
 def read_filters(args):
@@ -66,7 +66,8 @@ def read_filters(args):
 
 
 def filter_reports(reports, rtype=None, status=None, district=None, tag=None,
-                   activity=None, fy=None, month=None, q=None, approved_only=False):
+                   activity=None, fy=None, month=None, q=None, approved_only=False,
+                   subject=None):
     out = []
     ql = (q or "").lower()
     for r in reports:
@@ -79,6 +80,8 @@ def filter_reports(reports, rtype=None, status=None, district=None, tag=None,
         if district and r.get("district") != district:
             continue
         if tag and tag not in (r.get("tags") or []):
+            continue
+        if subject and subject not in (r.get("tag_paths") or r.get("tags") or []):
             continue
         if activity and r.get("activity") != activity:
             continue
@@ -239,3 +242,180 @@ def monthly_tracker(reports, fy, today=None):
                      "due": sum(c["state"] == "due" for c in cells)})
     return {"fy": fy, "fy_label": fy_label(fy),
             "labels": [C.MONTHS_SHORT[m - 1] for m in C.FY_MONTHS], "rows": rows}
+
+
+# ─────────────────────────────────────────────
+# Report linking: daily reports ↔ monthly / quarterly / half-yearly / annual
+# ─────────────────────────────────────────────
+def _add_months(y, m, n):
+    m0 = m - 1 + n
+    return y + m0 // 12, m0 % 12 + 1
+
+
+def _month_end(y, m):
+    ny, nm = _add_months(y, m, 1)
+    return date.fromordinal(date(ny, nm, 1).toordinal() - 1)
+
+
+def period_range(r):
+    """(first day, last day) a report covers, or None if unknown."""
+    try:
+        if r.get("rtype") == "daily":
+            d = date.fromisoformat(str(r.get("activity_date"))[:10])
+            return d, d
+        fy = int(r.get("fy"))
+        if r["rtype"] == "monthly":
+            m = int(r["month"])
+            y = fy if m >= 4 else fy + 1
+            return date(y, m, 1), _month_end(y, m)
+        if r["rtype"] == "quarterly":
+            y, m = _add_months(fy, 4, 3 * (int(r["quarter"]) - 1))
+            ey, em = _add_months(y, m, 2)
+            return date(y, m, 1), _month_end(ey, em)
+        if r["rtype"] == "halfyearly":
+            y, m = _add_months(fy, 4, 6 * (int(r["half"]) - 1))
+            ey, em = _add_months(y, m, 5)
+            return date(y, m, 1), _month_end(ey, em)
+        if r["rtype"] == "annual":
+            return date(fy, 4, 1), date(fy + 1, 3, 31)
+    except (TypeError, ValueError, KeyError):
+        return None
+    return None
+
+
+def _covers(periodic, daily):
+    """Head Office reports cover every district."""
+    return (periodic.get("district") == C.HEAD_OFFICE
+            or periodic.get("district") == daily.get("district"))
+
+
+def linked_daily(periodic, reports):
+    """Daily reports that fall inside a periodic report's period and district."""
+    rng = period_range(periodic)
+    if not rng or periodic.get("rtype") == "daily":
+        return []
+    out = []
+    for r in reports:
+        if r.get("rtype") != "daily" or not _covers(periodic, r):
+            continue
+        d = period_range(r)
+        if d and rng[0] <= d[0] <= rng[1]:
+            out.append(r)
+    return sorted(out, key=lambda r: str(r.get("activity_date")), reverse=True)
+
+
+def containing_periodic(daily, reports):
+    """Monthly, quarterly, half-yearly and annual reports a daily report belongs to."""
+    d = period_range(daily)
+    if not d or daily.get("rtype") != "daily":
+        return []
+    order = {k: i for i, k in enumerate(C.REPORT_TYPE_KEYS)}
+    out = []
+    for r in reports:
+        if r.get("rtype") == "daily" or not _covers(r, daily):
+            continue
+        rng = period_range(r)
+        if rng and rng[0] <= d[0] <= rng[1]:
+            out.append(r)
+    return sorted(out, key=lambda r: (order.get(r["rtype"], 9), r.get("district") == C.HEAD_OFFICE))
+
+
+def link_summary(daily_reports):
+    """Totals of linked daily reports (rejected ones left out)."""
+    rs = [r for r in daily_reports if r.get("status") != "Rejected"]
+    return {
+        "count": len(rs),
+        "approved": sum(1 for r in rs if r.get("status") == "Approved"),
+        "participants": sum(int(r.get("participants_total") or 0) for r in rs),
+        "by_activity": Counter(r.get("activity") for r in rs).most_common(),
+        "by_issue": Counter(t for r in rs for t in (r.get("tags") or [])).most_common(),
+    }
+
+
+# ─────────────────────────────────────────────
+# Issue tracking
+# ─────────────────────────────────────────────
+def sort_date(r):
+    rng = period_range(r)
+    return rng[0] if rng else (created_date(r) or date.min)
+
+
+FOLLOWUP_REPLY = ("Awaiting reply", "No reply after deadline")
+
+
+def needs_followup(r):
+    """A follow-up is noted, or a letter/RTI is still waiting for a reply."""
+    d = r.get("details") or {}
+    return bool(d.get("followup") or d.get("referrals") or d.get("reply") in FOLLOWUP_REPLY)
+
+
+def issue_overview(reports, issue_names):
+    """One row per issue: activities, approved, districts, latest date, follow-ups."""
+    rows = []
+    names = list(issue_names) + sorted({t for r in reports for t in (r.get("tags") or [])}
+                                       - set(issue_names))
+    for name in names:
+        rs = [r for r in reports if name in (r.get("tags") or [])]
+        acts = [r for r in rs if is_activity(r)]
+        latest = max((sort_date(r) for r in rs), default=None)
+        rows.append({
+            "issue": name, "in_list": name in issue_names, "total": len(rs),
+            "activities": len(acts),
+            "approved": sum(1 for r in rs if r.get("status") == "Approved"),
+            "districts": len({r.get("district") for r in rs}),
+            "participants": sum(int(r.get("participants_total") or 0) for r in acts),
+            "followups": sum(1 for r in rs if needs_followup(r)),
+            "latest": latest if latest and latest != date.min else None,
+        })
+    return rows
+
+
+def issue_detail(reports, path, subjects, fy=None):
+    """Everything tagged with an issue (or one of its subjects), for one FY or all time.
+
+    subjects: [(path, label)] of the next level down, for the breakdown.
+    """
+    rs = [r for r in reports if path in (r.get("tag_paths") or r.get("tags") or [])]
+    if fy:
+        rs = [r for r in rs if str(report_fy(r)) == str(fy)]
+    rs.sort(key=sort_date, reverse=True)
+    acts = [r for r in rs if is_activity(r)]
+    month_idx = {m: i for i, m in enumerate(C.FY_MONTHS)}
+    # Monthly volume: one FY, or the last 12 months that have data
+    if fy:
+        labels = [C.MONTHS_SHORT[m - 1] for m in C.FY_MONTHS]
+        monthly = [0] * 12
+        for r in acts:
+            monthly[month_idx[sort_date(r).month]] += 1
+    else:
+        counts = Counter((sort_date(r).year, sort_date(r).month) for r in acts)
+        keys = sorted(counts)[-12:]
+        labels = [f"{C.MONTHS_SHORT[m - 1]} {str(y)[-2:]}" for y, m in keys]
+        monthly = [counts[k] for k in keys]
+    timeline = OrderedDict()
+    for r in rs:
+        d = sort_date(r)
+        timeline.setdefault(f"{C.MONTHS[d.month - 1]} {d.year}" if d != date.min else "—", []).append(r)
+    by_activity = Counter(r.get("activity") for r in acts)
+    by_district = Counter(r.get("district") for r in rs)
+    status = Counter(r.get("status") for r in rs)
+    return {
+        "reports": rs, "total": len(rs), "activities": len(acts),
+        "approved": status.get("Approved", 0),
+        "pending": sum(status.get(s, 0) for s in C.REVIEW_STATUSES + C.RETURNED_STATUSES),
+        "participants": sum(int(r.get("participants_total") or 0) for r in acts),
+        "districts": len(by_district),
+        "followups": [r for r in rs if needs_followup(r)],
+        "timeline": timeline,
+        "subjects": [(p, label, sum(1 for r in rs if p in (r.get("tag_paths") or [])))
+                     for p, label in subjects],
+        "charts": {
+            "monthly": {"labels": labels, "data": monthly},
+            "activity": {"labels": [a for a, _ in by_activity.most_common()],
+                         "data": [n for _, n in by_activity.most_common()]},
+            "district": {"labels": [d for d, _ in by_district.most_common()],
+                         "data": [n for _, n in by_district.most_common()]},
+            "status": {"labels": [C.STATUS_LABEL[s] for s in C.STATUSES],
+                       "data": [status.get(s, 0) for s in C.STATUSES]},
+        },
+    }

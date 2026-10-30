@@ -724,7 +724,49 @@ def report_detail(report_id):
     if not r:
         return redirect(url_for("reports"))
     show_files = not is_guest() or settings().get("guest_see_attachments", True)
-    return render_template("report_detail.html", report=r, show_files=show_files)
+    # Daily ↔ periodic linking, among the reports this user may see
+    visible = load_reports()
+    linked = A.linked_daily(r, visible)
+    return render_template("report_detail.html", report=r, show_files=show_files,
+                           linked=linked, link_summary=A.link_summary(linked),
+                           part_of=A.containing_periodic(r, visible))
+
+
+# ─────────────────────────────────────────────
+# Issue tracking (revised module, section 8)
+# ─────────────────────────────────────────────
+@app.route("/issues")
+@login_required
+def issues():
+    rows = A.issue_overview(load_reports(), issue_tags())
+    chart = {"labels": [r["issue"] for r in rows if r["total"]],
+             "data": [r["total"] for r in rows if r["total"]]}
+    return render_template("issues.html", rows=rows, chart=chart)
+
+
+@app.route("/issues/view")
+@login_required
+def issue_view():
+    """One issue, or one subject / sub-subject of it (?path=Issue › Subject)."""
+    path = request.args.get("path", "").strip()
+    if not path:
+        return redirect(url_for("issues"))
+    issue = T.issue_of(path)
+    tree_issue = next((i for i in issue_tree() if i["name"] == issue), None)
+    # The next level down, for the breakdown and the links
+    subjects = []
+    if tree_issue:
+        parts = path.split(T.SEP)
+        if len(parts) == 1:
+            subjects = [(issue + T.SEP + s["name"], s["name"]) for s in tree_issue["subjects"]]
+        elif len(parts) == 2:
+            s = next((s for s in tree_issue["subjects"] if s["name"] == parts[1]), None)
+            subjects = [(path + T.SEP + sub, sub) for sub in (s["subs"] if s else [])]
+    reports = load_reports()
+    fy = request.args.get("fy", "")
+    data = A.issue_detail(reports, path, subjects, fy=fy)
+    return render_template("issue_view.html", path=path, crumbs=path.split(T.SEP), data=data,
+                           fy=fy, fys=A.available_fys(reports))
 
 
 @app.route("/reports/<int:report_id>/comment", methods=["POST"])
@@ -928,6 +970,8 @@ def export_file(fmt):
             parts.append(C.MONTHS[int(filters["month"]) - 1])
         if filters.get("tag"):
             parts.append(f"Tag: {filters['tag']}")
+        if filters.get("subject"):
+            parts.append(f"Issue: {filters['subject']}")
         if filters.get("status"):
             parts.append(filters["status"])
         if filters.get("activity"):

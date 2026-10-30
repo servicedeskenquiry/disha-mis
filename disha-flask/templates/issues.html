@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title_suffix %} – Issue Tracking{% endblock %}
+{% block topbar_title %}<span data-t>Issue Tracking</span>{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div class="page-sub" data-t>Every report tagged with an issue, grouped together across dates, districts and reporting periods. Click an issue to see its full history.</div>
+  <form method="GET" action="{{ url_for('reports') }}" class="inline-filter">
+    <input type="search" name="q" placeholder="Search all reports…" data-tp aria-label="Search all reports">
+    <button type="submit" class="btn btn-primary btn-sm" data-t>Search</button>
+  </form>
+</div>
+
+{% if chart.data %}
+<div class="chart-card" style="margin-bottom:16px">
+  <div class="chart-title" data-t>Reports per issue</div>
+  <div class="chart-wrap tall"><canvas id="issueChart"></canvas></div>
+</div>
+{% endif %}
+
+<div class="card" style="padding:0;overflow:hidden">
+  <div class="table-scroll">
+  <table>
+    <thead><tr>
+      <th data-t>Issue</th><th class="tc" data-t>Reports</th><th class="tc" data-t>Activities</th>
+      <th class="tc" data-t>Approved</th><th class="tc" data-t>Districts</th><th class="tc" data-t>Participants</th>
+      <th class="tc" data-t>Follow-ups open</th><th data-t>Latest</th>
+    </tr></thead>
+    <tbody>
+      {% for row in rows %}
+      <tr class="clickable" onclick="window.location='{{ url_for('issue_view', path=row.issue) }}'">
+        <td><strong data-t>{{ row.issue }}</strong>{% if not row.in_list %} <small class="muted" data-t>(no longer in the list)</small>{% endif %}</td>
+        <td class="tc">{{ row.total or '·' }}</td>
+        <td class="tc">{{ row.activities or '·' }}</td>
+        <td class="tc">{{ row.approved or '·' }}</td>
+        <td class="tc">{{ row.districts or '·' }}</td>
+        <td class="tc">{{ row.participants or '·' }}</td>
+        <td class="tc">{% if row.followups %}<strong style="color:var(--amber)">{{ row.followups }}</strong>{% else %}·{% endif %}</td>
+        <td>{{ row.latest.strftime('%d %b %Y') if row.latest else '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="empty" data-t>No issues yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const ISSUE_CHART = {{ chart|tojson }};
+onChartsReady(() => {
+  barChart('issueChart', ISSUE_CHART.labels, [{label: 'Reports', data: ISSUE_CHART.data, color: 'rgba(26,95,168,.75)'}], {horizontal: true});
+});
+</script>
+{% endblock %}

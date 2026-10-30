@@ -69,7 +69,7 @@
 
   {% if report.tag_paths or report.tags %}
   <div class="sec-div" data-t>🏷️ Issue › Subject › Sub-subject</div>
-  <div style="margin-bottom:12px">{% for p in T.leaf_paths(report.tag_paths or report.tags) %}<a class="tag tag-path" href="{{ url_for('reports', tag=T.issue_of(p)) }}">{% for part in p.split(T.SEP) %}{% if not loop.first %} › {% endif %}<span data-t>{{ part }}</span>{% endfor %}</a>{% endfor %}</div>
+  <div style="margin-bottom:12px">{% for p in T.leaf_paths(report.tag_paths or report.tags) %}<a class="tag tag-path" href="{{ url_for('issue_view', path=p) }}">{% for part in p.split(T.SEP) %}{% if not loop.first %} › {% endif %}<span data-t>{{ part }}</span>{% endfor %}</a>{% endfor %}</div>
   {% endif %}
 
   {% if report.participants %}
@@ -114,6 +114,44 @@
   {% endfor %}
   {% endif %}
 </div>
+
+<!-- LINKED REPORTS: daily ↔ monthly / quarterly / half-yearly / annual -->
+{% if report.rtype == 'daily' and part_of %}
+<div class="card part-of">
+  <div class="card-title" data-t>🔗 Included in these periodic reports</div>
+  {% for p in part_of %}<a class="tag" href="{{ url_for('report_detail', report_id=p.id) }}"><span data-t>{{ C.REPORT_TYPE_SHORT[p.rtype] }}</span> · {{ p.period }}{% if p.district != report.district %} · <span data-t>{{ p.district }}</span>{% endif %} · #{{ p.id }}</a>{% endfor %}
+</div>
+{% elif report.rtype != 'daily' %}
+<div class="card">
+  <div class="card-title">
+    <span data-t>🔗 Daily reports in this period</span>
+    <small class="muted">{{ report.period }} · <span data-t>{{ 'all districts' if report.district == C.HEAD_OFFICE else report.district }}</span></small>
+  </div>
+  {% if linked %}
+  <div class="linked-stats mini-stats">
+    <div class="mini-stat big"><b>{{ link_summary.count }}</b><span data-t>Daily reports</span></div>
+    <div class="mini-stat"><b>{{ link_summary.approved }}</b><span data-t>Approved</span></div>
+    <div class="mini-stat"><b>{{ link_summary.participants }}</b><span data-t>Participants</span></div>
+  </div>
+  {% if link_summary.by_issue %}
+  <div class="sec-div" data-t>By issue</div>
+  <div style="margin-bottom:8px">{% for name, n in link_summary.by_issue %}<a class="tag" href="{{ url_for('issue_view', path=name) }}"><span data-t>{{ name }}</span> · {{ n }}</a>{% endfor %}</div>
+  {% endif %}
+  <div class="sec-div" data-t>By activity type</div>
+  <div style="margin-bottom:8px">{% for name, n in link_summary.by_activity %}<span class="tag"><span data-t>{{ name }}</span> · {{ n }}</span>{% endfor %}</div>
+  <details>
+    <summary><span data-t>Show the daily reports</span> ({{ linked|length }})</summary>
+    <ul class="link-list" style="margin-top:6px">
+      {% for d in linked %}
+      <li><a href="{{ url_for('report_detail', report_id=d.id) }}">#{{ d.id }}</a> · {{ d.period }} · <span data-t>{{ d.activity }}</span>{% if report.district == C.HEAD_OFFICE %} · <span data-t>{{ d.district }}</span>{% endif %}{% if d.village %} · {{ d.village }}{% endif %} · <span class="pill pill-{{ d.status|lower }}" data-t>{{ C.STATUS_LABEL.get(d.status, d.status) }}</span></li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% else %}
+  <div class="empty" style="padding:6px 0" data-t>No daily reports were entered for this district and period.</div>
+  {% endif %}
+</div>
+{% endif %}
 
 <!-- COMMENTS -->
 <div class="card">

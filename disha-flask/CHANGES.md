@@ -1,3 +1,16 @@
+# Phase 4: issue tracking and report linking (revised module sections 7, 8 and 11, 30.10.2026)
+
+No database change: just upload the code.
+
+| Item | Where |
+|---|---|
+| **Issue Tracking** page: every issue with reports, activities, approved, districts, participants, open follow-ups and latest date, plus a chart | `/issues`, `templates/issues.html` |
+| One page per issue, subject or sub-subject: monthly chart, status, activity types, districts, open follow-ups, and every report grouped by month; filter by financial year | `/issues/view?path=…`, `analytics.issue_detail` |
+| Open follow-ups: letters/RTIs awaiting a reply, and reports with a follow-up or referral noted | `analytics.needs_followup` |
+| Daily reports are linked automatically to the monthly, quarterly, half-yearly and annual reports that cover their date and district (Head Office covers all districts). Shown on both reports, with totals by issue and activity type | `analytics.linked_daily`, `containing_periodic`, report page |
+| Issue-wise download (Excel, Word, PDF) of everything under an issue or subject | `export_file?subject=…` |
+| Guests see the same pages, limited to the reports they are allowed to see | `load_reports` |
+
 # Phase 3: data entry (revised module sections 2–4, 30.10.2026)
 
 Run `supabase_phase3.sql` in the Supabase SQL Editor **before** uploading this code.

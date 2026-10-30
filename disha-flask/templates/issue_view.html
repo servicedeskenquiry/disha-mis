@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title_suffix %} – {{ crumbs[-1] }}{% endblock %}
+{% block topbar_title %}<span data-t>Issue Tracking</span>{% endblock %}
+
+{% block content %}
+<div class="crumbs">
+  <a href="{{ url_for('issues') }}" data-t>All issues</a>
+  {% for c in crumbs %} › {% if loop.last %}<strong data-t>{{ c }}</strong>{% else %}<a href="{{ url_for('issue_view', path=crumbs[:loop.index]|join(T.SEP), fy=fy) }}" data-t>{{ c }}</a>{% endif %}{% endfor %}
+</div>
+
+<div class="page-head">
+  <form method="GET" class="inline-filter">
+    <input type="hidden" name="path" value="{{ path }}">
+    <label for="iv-fy" data-t>Period</label>
+    <select name="fy" id="iv-fy" onchange="this.form.submit()">
+      <option value="" data-t>All years</option>
+      {% for y in fys %}<option value="{{ y }}" {% if fy|string == y|string %}selected{% endif %}>{{ fy_label(y) }}</option>{% endfor %}
+    </select>
+  </form>
+  {% if can_download and data.total %}
+  <div class="export-btns">
+    <span data-t>Download</span>:
+    {% for fmt, label in [('xlsx','Excel'),('docx','Word'),('pdf','PDF')] %}
+    <a class="btn btn-secondary btn-sm" href="{{ url_for('export_file', fmt=fmt, subject=path, fy=fy or none) }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="stats-row">
+  <div class="stat-card"><div class="stat-accent" style="background:#1a5fa8"></div><div class="stat-label" data-t>Reports</div><div class="stat-value">{{ data.total }}</div><div class="stat-sub">{{ data.activities }} <span data-t>field activities</span></div></div>
+  <div class="stat-card"><div class="stat-accent" style="background:#2d9e65"></div><div class="stat-label" data-t>Approved</div><div class="stat-value">{{ data.approved }}</div><div class="stat-sub">{{ data.pending }} <span data-t>still in review</span></div></div>
+  <div class="stat-card"><div class="stat-accent" style="background:#b87800"></div><div class="stat-label" data-t>Participants</div><div class="stat-value">{{ data.participants }}</div><div class="stat-sub">{{ data.districts }} <span data-t>districts</span></div></div>
+  <div class="stat-card"><div class="stat-accent" style="background:#e67e00"></div><div class="stat-label" data-t>Follow-ups open</div><div class="stat-value">{{ data.followups|length }}</div><div class="stat-sub" data-t>letters awaiting reply, follow-ups noted</div></div>
+</div>
+
+{% if data.subjects %}
+<div class="card">
+  <div class="card-title" data-t>{{ 'Subjects' if crumbs|length == 1 else 'Sub-subjects' }}</div>
+  <div>
+    {% for p, label, n in data.subjects %}
+    <a class="tag tag-path" href="{{ url_for('issue_view', path=p, fy=fy) }}"><span data-t>{{ label }}</span> · {{ n }}</a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if data.total %}
+<div class="charts-row">
+  <div class="chart-card wide">
+    <div class="chart-title"><span data-t>Activities by month</span> <small>{{ fy_label(fy|int) if fy else '' }}</small></div>
+    <div class="chart-wrap"><canvas id="ivMonthly"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title" data-t>Report Status</div>
+    <div class="chart-wrap"><canvas id="ivStatus"></canvas></div>
+  </div>
+</div>
+<div class="charts-row">
+  <div class="chart-card wide">
+    <div class="chart-title" data-t>Activity Types</div>
+    <div class="chart-wrap tall"><canvas id="ivActivity"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title" data-t>By District</div>
+    <div class="chart-wrap tall"><canvas id="ivDistrict"></canvas></div>
+  </div>
+</div>
+{% endif %}
+
+{% if data.followups %}
+<div class="card">
+  <div class="card-title" data-t>⏳ Follow-ups open</div>
+  <ul class="link-list">
+    {% for r in data.followups %}
+    <li><a href="{{ url_for('report_detail', report_id=r.id) }}">#{{ r.id }}</a> · <span data-t>{{ r.activity }}</span> · <span data-t>{{ r.district }}</span> · {{ r.period }}
+      {% set d = r.details or {} %}
+      {% if d.reply %} · <span class="pill pill-pending" data-t>{{ d.reply }}</span>{% endif %}
+      {% if d.followup %}<div class="h-note">{{ d.followup }}</div>{% endif %}
+      {% if d.referrals %}<div class="h-note">{{ d.referrals }}</div>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-title" data-t>🕑 All activity on this issue</div>
+  {% for month, rs in data.timeline.items() %}
+  <div class="sec-div">{{ month }} <small class="muted">· {{ rs|length }}</small></div>
+  <div class="table-scroll">
+  <table class="compact">
+    <tbody>
+      {% for r in rs %}
+      <tr class="clickable" onclick="window.location='{{ url_for('report_detail', report_id=r.id) }}'">
+        <td style="width:60px"><strong>#{{ r.id }}</strong></td>
+        <td style="width:110px">{{ r.period }}</td>
+        <td><span class="pill pill-{{ r.rtype }}" data-t>{{ C.REPORT_TYPE_SHORT[r.rtype] }}</span> <span data-t>{{ r.activity }}</span></td>
+        <td><span data-t>{{ r.district }}</span>{% if r.block %} · {{ r.block }}{% endif %}{% if r.village %} · {{ r.village }}{% endif %}</td>
+        <td>{% for p in T.leaf_paths(r.tag_paths or r.tags) if p.startswith(path) and p != path %}<span class="tag">{{ p[path|length + T.SEP|length:] }}</span>{% endfor %}</td>
+        <td style="width:110px"><span class="pill pill-{{ r.status|lower }}" data-t>{{ C.STATUS_LABEL.get(r.status, r.status) }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty" data-t>No reports are tagged with this yet.</div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const IV = {{ data.charts|tojson }};
+onChartsReady(() => {
+  barChart('ivMonthly', IV.monthly.labels, [{label: 'Activities', data: IV.monthly.data}]);
+  doughnutChart('ivStatus', IV.status.labels, IV.status.data, ['#e67e00', '#1a5fa8', '#c0392b', '#7b2fa8', '#2d9e65']);
+  barChart('ivActivity', IV.activity.labels, [{label: 'Activities', data: IV.activity.data, color: 'rgba(184,120,0,.75)'}], {horizontal: true});
+  barChart('ivDistrict', IV.district.labels, [{label: 'Reports', data: IV.district.data, color: 'rgba(26,95,168,.75)'}], {horizontal: true});
+});
+</script>
+{% endblock %}

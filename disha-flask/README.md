@@ -115,6 +115,10 @@ templates/
   users.html             User Management
 ```
 
+## Issue tracking and report linking
+
+**Issue Tracking** (left menu) lists every issue in the tag list with its totals. Click one for its full history, subjects, charts and open follow-ups. Daily reports are linked to periodic reports by date and district, with nothing extra to enter: a monthly report shows the daily reports of that month, and a daily report shows which monthly, quarterly, half-yearly and annual reports it belongs to.
+
 ## Roles
 
 Follows the permission matrix in the revised module. The full table is on **Admin › Settings**.

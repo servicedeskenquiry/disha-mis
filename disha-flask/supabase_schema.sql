@@ -19,10 +19,15 @@ CREATE TABLE IF NOT EXISTS reports (
     month               INTEGER CHECK (month BETWEEN 1 AND 12),
     quarter             INTEGER CHECK (quarter BETWEEN 1 AND 4),
     half                INTEGER CHECK (half IN (1, 2)),
-    location            TEXT,
+    location            TEXT,                    -- venue
+    block               TEXT,
+    gp                  TEXT,                    -- Gram Panchayat
+    village             TEXT,
+    source_channel      TEXT,                    -- WhatsApp, Email, Word document, PDF, ...
     participants        JSONB DEFAULT '{}'::jsonb,   -- {"total": 32, "women": 12, "men": 20, ...}
     participants_total  INTEGER DEFAULT 0,
-    tags                TEXT[] DEFAULT '{}',         -- issue tags
+    tags                TEXT[] DEFAULT '{}',         -- issues (top level)
+    tag_paths           TEXT[] DEFAULT '{}',         -- 'Issue › Subject › Sub-subject'
     details             JSONB DEFAULT '{}'::jsonb,   -- activity-template fields
     description         TEXT,
     remarks             TEXT,
@@ -45,6 +50,9 @@ CREATE INDEX IF NOT EXISTS reports_rtype_idx    ON reports (rtype);
 CREATE INDEX IF NOT EXISTS reports_tags_idx     ON reports USING GIN (tags);
 CREATE INDEX IF NOT EXISTS reports_status_idx   ON reports (status);
 CREATE INDEX IF NOT EXISTS reports_created_by_idx ON reports (created_by);
+CREATE INDEX IF NOT EXISTS reports_tag_paths_idx ON reports USING GIN (tag_paths);
+CREATE INDEX IF NOT EXISTS reports_block_idx     ON reports (district, block);
+CREATE INDEX IF NOT EXISTS reports_dup_idx       ON reports (rtype, district, activity, period);
 
 -- Row Level Security is on with no policies: only the server's
 -- service_role key (SUPABASE_SERVICE_KEY) can read or write.

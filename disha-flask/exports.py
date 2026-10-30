@@ -10,7 +10,7 @@ from io import BytesIO
 
 import config as C
 
-COLUMNS = ["ID", "Report Type", "District", "Activity", "Date / Period", "Location",
+COLUMNS = ["ID", "Report Type", "District", "Activity", "Date / Period", "Place",
            "Participants", "Issue Tags", "Status", "Submitted By", "Description"]
 
 MIMETYPES = {
@@ -28,13 +28,26 @@ def row(r):
         r.get("district") or "",
         r.get("activity") or "",
         r.get("period") or "",
-        r.get("location") or "",
+        place_text(r),
         r.get("participants_total") or 0,
-        ", ".join(r.get("tags") or []),
+        "; ".join(leaf_tags(r)),
         C.STATUS_LABEL.get(r.get("status"), r.get("status") or ""),
         r.get("submitted_by") or "",
         r.get("description") or "",
     ]
+
+
+def place_text(r):
+    """Village, GP, Block, then the venue if it adds something."""
+    parts = [r.get(k) for k in ("village", "gp", "block") if r.get(k)]
+    if r.get("location") and r["location"] not in parts:
+        parts.append(r["location"])
+    return ", ".join(parts)
+
+
+def leaf_tags(r):
+    paths = r.get("tag_paths") or r.get("tags") or []
+    return [p for p in paths if not any(o != p and o.startswith(p + " › ") for o in paths)]
 
 
 def participants_text(r):

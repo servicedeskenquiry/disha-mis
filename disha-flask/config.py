@@ -5,7 +5,7 @@ Everything the client may want to change without touching the app logic
 lives here: districts, report types, activity types and their templates,
 participant categories and issue tags.
 
-PLACEHOLDERS: ACTIVITY_TYPES (and their template fields) and ISSUE_TAGS are
+PLACEHOLDERS: ACTIVITY_TYPES (their template fields) and DEFAULT_ISSUE_TREE are
 provisional. The Fisheries Team will share their existing formats and the
 proposed issue-tag list; replace the lists below when those arrive.
 """
@@ -85,9 +85,11 @@ REVIEW_STATUSES = ("Pending", "Resubmitted")    # waiting for the Approver
 RETURNED_STATUSES = ("Query", "Rejected")       # waiting for Back Office
 
 # ─────────────────────────────────────────────
-# Activity types (5 + Others) and the template that opens for each.
-# Field types: text, textarea, number. PROVISIONAL – to be replaced with the
-# Fisheries Team's formats.
+# Activity types: the 10 categories of the revised module (section 2), plus
+# Others, and the format that opens for each. Field types: text, textarea,
+# number, date, select (with "options"). The first five keep their earlier
+# names so existing reports stay linked. The formats are a first draft for
+# the Fisheries Team to review; activity types can change after go-live.
 # ─────────────────────────────────────────────
 OTHERS = "Others"
 CONSOLIDATED = "Consolidated (all activities)"
@@ -97,9 +99,22 @@ ACTIVITY_TYPES = [
         "name": "Community Meeting (incl. Women's & Youth)",
         "short": "Community Meeting",
         "fields": [
+            {"key": "meeting_type", "label": "Meeting type", "type": "select",
+             "options": ["General community meeting", "Women's meeting", "Youth meeting"]},
             {"key": "agenda",    "label": "Agenda",               "type": "textarea"},
             {"key": "decisions", "label": "Key decisions taken",  "type": "textarea"},
             {"key": "followup",  "label": "Follow-up responsibility", "type": "text"},
+        ],
+    },
+    {
+        "name": "Block / District / State Conference",
+        "short": "Conference",
+        "fields": [
+            {"key": "level",       "label": "Conference level", "type": "select",
+             "options": ["Block", "District", "State"]},
+            {"key": "theme",       "label": "Theme / title",            "type": "text"},
+            {"key": "guests",      "label": "Chief guests / speakers",  "type": "text"},
+            {"key": "resolutions", "label": "Resolutions adopted",      "type": "textarea"},
         ],
     },
     {
@@ -130,12 +145,58 @@ ACTIVITY_TYPES = [
         ],
     },
     {
+        "name": "Letter to Authorities (incl. RTI)",
+        "short": "Letter / RTI",
+        "fields": [
+            {"key": "letter_type", "label": "Type", "type": "select",
+             "options": ["Letter / memorandum", "RTI application", "RTI appeal"]},
+            {"key": "addressed_to", "label": "Addressed to (officer / office)", "type": "text"},
+            {"key": "subject",      "label": "Subject",                        "type": "text"},
+            {"key": "ref_no",       "label": "Reference / memo number",        "type": "text"},
+            {"key": "reply",        "label": "Reply status", "type": "select",
+             "options": ["Awaiting reply", "Reply received", "No reply after deadline"]},
+            {"key": "reply_note",   "label": "Reply received (summary)",       "type": "textarea"},
+        ],
+    },
+    {
+        "name": "Policy Intervention Document",
+        "short": "Policy Document",
+        "fields": [
+            {"key": "title",        "label": "Document title",                 "type": "text"},
+            {"key": "submitted_to", "label": "Submitted to",                   "type": "text"},
+            {"key": "key_points",   "label": "Key demands / recommendations",  "type": "textarea"},
+        ],
+    },
+    {
         "name": "Research & Investigation (Survey / Field Visit)",
         "short": "Research",
         "fields": [
+            {"key": "visit_type", "label": "Type of study / visit", "type": "select",
+             "options": ["Survey", "Study", "Landing centre visit", "Fish farming visit",
+                         "Fish drying yard visit", "Processing unit visit", "Fish market visit",
+                         "Other field visit"]},
             {"key": "area",      "label": "Area covered",         "type": "text"},
             {"key": "sample",    "label": "Households / units surveyed", "type": "number"},
             {"key": "findings",  "label": "Key findings",         "type": "textarea"},
+        ],
+    },
+    {
+        "name": "Legal Clinic & Counselling",
+        "short": "Legal Clinic",
+        "fields": [
+            {"key": "lawyer",     "label": "Lawyer / counsellor",          "type": "text"},
+            {"key": "cases",      "label": "Number of cases heard",        "type": "number"},
+            {"key": "case_types", "label": "Nature of cases",              "type": "textarea"},
+            {"key": "referrals",  "label": "Referrals / next steps",       "type": "textarea"},
+        ],
+    },
+    {
+        "name": "Exposure Visit",
+        "short": "Exposure Visit",
+        "fields": [
+            {"key": "place",    "label": "Place visited",               "type": "text"},
+            {"key": "host",     "label": "Host organisation",           "type": "text"},
+            {"key": "learning", "label": "Key learnings",               "type": "textarea"},
         ],
     },
     {
@@ -173,20 +234,47 @@ PARTICIPANT_CATEGORIES = [
 PARTICIPANT_LABEL = {c["key"]: c["label"] for c in PARTICIPANT_CATEGORIES}
 
 # ─────────────────────────────────────────────
-# Issue tags – PROVISIONAL list until the Fisheries Team shares theirs
+# Issue › Subject › Sub-subject tags (revised module, section 4).
+# The Admin edits this list on the Settings page; this is only the starting
+# list. PROVISIONAL until the Fisheries Team shares theirs.
+# Format: an issue on its own line, "- " before a subject, "-- " before a
+# sub-subject.
 # ─────────────────────────────────────────────
-ISSUE_TAGS = [
-    "Fishing Rights & Access",
-    "Fishermen ID / Biometric Card",
-    "Social Security & Welfare Schemes",
-    "PMMSY",
-    "Women Fish Workers",
-    "Coastal Regulation (CRZ)",
-    "Inland Water Bodies & Ponds",
-    "Disaster & Climate",
-    "Livelihood & Market",
-    "Legal Aid",
-]
+DEFAULT_ISSUE_TREE = """\
+Fishing Rights & Access
+- Net ban / fishing ban period
+- Access to water bodies
+Fishermen ID / Biometric Card
+- New card
+- Renewal / correction
+Social Security & Welfare Schemes
+- Savings-cum-relief
+- Old age pension
+- Accident insurance
+PMMSY
+Women Fish Workers
+- Market space
+- Credit and SHG
+Coastal Regulation (CRZ)
+Inland Water Bodies & Ponds
+- Lease of water bodies
+- Pollution
+Disaster & Climate
+- Cyclone relief
+- Compensation
+Livelihood & Market
+- Fish market infrastructure
+- Fair price
+Legal Aid
+"""
+
+# Top-level issues of the starting list (demo data, first start)
+ISSUE_TAGS = [l.strip() for l in DEFAULT_ISSUE_TREE.splitlines()
+              if l.strip() and not l.strip().startswith("-")]
+
+# Where the information came from (revised module, section 3)
+SOURCE_CHANNELS = ["WhatsApp", "Email", "Word document", "PDF", "Phone call",
+                   "Field visit / in person", "Other"]
 
 # ─────────────────────────────────────────────
 # Periods. Quarters and halves follow the Indian financial year
@@ -238,4 +326,6 @@ DEFAULT_SETTINGS = {
     "guest_can_comment": True,
     "guest_see_attachments": True,
     "backoffice_can_download": True,  # own reports only
+    "backoffice_see_all": False,      # read-only view of every report
+    "issue_tree": DEFAULT_ISSUE_TREE,
 }

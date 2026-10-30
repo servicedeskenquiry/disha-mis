@@ -27,8 +27,27 @@ SAMPLE_TEXT = {
         "compensation claims.",
     "Research & Investigation (Survey / Field Visit)":
         "Field survey of village ponds and landing centres to document access and ownership.",
+    "Block / District / State Conference":
+        "Block-level conference of fisher unions on the net ban period and relief.",
+    "Letter to Authorities (incl. RTI)":
+        "RTI application on the status of savings-cum-relief payments.",
+    "Policy Intervention Document":
+        "Memorandum on inland water body leasing submitted to the district office.",
+    "Legal Clinic & Counselling":
+        "Legal clinic on fishing licence and boat registration disputes.",
+    "Exposure Visit":
+        "Exposure visit of women fish workers to a fish drying cooperative.",
     C.OTHERS: "Support visit to the fisher cooperative.",
 }
+ACTIVITY_WEIGHTS = {
+    "Community Meeting (incl. Women's & Youth)": 9, "Training Programme": 7,
+    "Campaign & Awareness": 6, "Deputation & Meeting with Govt. Officials": 5,
+    "Research & Investigation (Survey / Field Visit)": 4,
+    "Letter to Authorities (incl. RTI)": 3, "Block / District / State Conference": 2,
+    "Legal Clinic & Counselling": 2, "Policy Intervention Document": 1,
+    "Exposure Visit": 1, C.OTHERS: 1,
+}
+BLOCKS = ["Block A", "Block B", "Block C"]
 
 
 def _participants(rng, activity):
@@ -59,7 +78,7 @@ def build_reports():
     while d <= today:
         for _ in range(rng.choice([0, 0, 1, 1, 2])):
             rid += 1
-            act = rng.choices(activities, weights=[9, 7, 6, 5, 4, 2])[0]
+            act = rng.choices(activities, weights=[ACTIVITY_WEIGHTS[a] for a in activities])[0]
             dist = rng.choice(C.DISTRICTS)
             p, total = _participants(rng, act)
             created = d + timedelta(days=rng.randint(0, 2))
@@ -68,6 +87,8 @@ def build_reports():
                 "activity_date": d.isoformat(), "period": d.strftime("%d %b %Y"),
                 "fy": d.year if d.month >= 4 else d.year - 1, "month": d.month,
                 "location": rng.choice(PLACES),
+                "block": rng.choice(BLOCKS), "village": rng.choice(PLACES).split(",")[0],
+                "source_channel": rng.choice(["WhatsApp", "WhatsApp", "WhatsApp", "Email", "PDF"]),
                 "participants": p, "participants_total": total,
                 "tags": rng.sample(C.ISSUE_TAGS, rng.choice([1, 1, 2, 3])),
                 "details": {}, "description": SAMPLE_TEXT[act],

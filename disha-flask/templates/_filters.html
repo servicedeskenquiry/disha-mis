@@ -14,7 +14,7 @@
   </select>
   <select name="tag" aria-label="Issue tag">
     <option value="" data-t>All tags</option>
-    {% for t in C.ISSUE_TAGS %}<option value="{{ t }}" {% if filters.get('tag') == t %}selected{% endif %} data-t>{{ t }}</option>{% endfor %}
+    {% for t in issue_tags %}<option value="{{ t }}" {% if filters.get('tag') == t %}selected{% endif %} data-t>{{ t }}</option>{% endfor %}
   </select>
   <select name="activity" aria-label="Activity type">
     <option value="" data-t>All activity types</option>

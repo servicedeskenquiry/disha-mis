@@ -91,6 +91,7 @@ function selectType(type, el, instant) {
     if (!periodic && !dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
   }
   showTemplate(document.getElementById('f-activity').value);
+  updatePlaces();
 
   const go = () => {
     document.getElementById('step1').style.display = 'none';
@@ -375,3 +376,109 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => el.remove(), 5500);
   });
 });
+
+// ──────────────────────────────────────────────
+// Phase 3: Block / GP / Village, issue tree, duplicate check
+// ──────────────────────────────────────────────
+function updatePlaces() {
+  if (typeof PLACES === 'undefined') return;
+  const district = (document.getElementById('f-district') || {}).value || '';
+  const lists = PLACES[district] || {};
+  ['block', 'gp', 'village'].forEach(k => {
+    const dl = document.getElementById('dl-' + k);
+    if (!dl) return;
+    dl.innerHTML = '';
+    (lists[k] || []).forEach(v => { const o = document.createElement('option'); o.value = v; dl.appendChild(o); });
+  });
+  // Block is required for Daily reports of a district (not Head Office)
+  const rtype = (document.getElementById('rtype-input') || {}).value;
+  const block = document.getElementById('f-block');
+  const need = rtype === 'daily' && district !== 'Head Office';
+  if (block) block.required = need;
+  document.querySelectorAll('.daily-req').forEach(s => { s.style.display = need ? '' : 'none'; });
+}
+
+// Ticking a subject ticks its issue; unticking an issue clears what is below it
+function tagToggle(cb) {
+  const box = cb.closest('.tt-issue, .tt-subject');
+  if (cb.checked) {
+    let el = cb.closest('.tt-children');
+    while (el) {
+      const parentBox = el.parentElement;
+      const parentCb = parentBox && parentBox.querySelector(':scope > label input[type=checkbox]');
+      if (parentCb) parentCb.checked = true;
+      el = parentBox ? parentBox.closest('.tt-children') : null;
+    }
+  } else if (box && box.querySelector(':scope > label input') === cb) {
+    box.querySelectorAll('.tt-children input[type=checkbox]').forEach(i => { i.checked = false; });
+  }
+  refreshTagTree();
+}
+
+function refreshTagTree() {
+  document.querySelectorAll('.tt-issue, .tt-subject').forEach(box => {
+    const own = box.querySelector(':scope > label input[type=checkbox]');
+    box.classList.toggle('open', !!(own && own.checked));
+  });
+}
+
+let dupChecked = false;
+function initReportForm() {
+  const form = document.getElementById('report-form');
+  if (!form) return;
+  const district = document.getElementById('f-district');
+  if (district) district.addEventListener('change', updatePlaces);
+  updatePlaces();
+  refreshTagTree();
+
+  form.addEventListener('submit', async e => {
+    if (dupChecked || document.getElementById('confirm-dup').value === '1') return;
+    // At least one issue tag
+    if (!form.querySelector('input[name=tagpath]:checked')) {
+      e.preventDefault();
+      alertBox(tr('Please select at least one Issue tag.'));
+      return;
+    }
+    e.preventDefault();
+    const fd = new FormData(form);
+    for (const k of [...fd.keys()]) if (k.startsWith('files_')) fd.delete(k);
+    if (REPORT_ID) fd.set('report_id', REPORT_ID);
+    let dups = [];
+    try {
+      const r = await fetch(DUP_URL, { method: 'POST', body: fd, credentials: 'same-origin' });
+      if (r.ok) dups = await r.json();
+    } catch (_) { /* network hiccup: the server checks again */ }
+    if (!dups.length) { dupChecked = true; form.submit(); return; }
+    const list = document.getElementById('dup-list');
+    list.innerHTML = '';
+    dups.forEach(d => {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = '/reports/' + d.id; a.target = '_blank'; a.textContent = '#' + d.id;
+      li.appendChild(a);
+      li.appendChild(document.createTextNode(` · ${d.district} · ${d.period}${d.village ? ' · ' + d.village : ''} · ${d.submitted_by} · ${tr(d.status)}`));
+      list.appendChild(li);
+    });
+    const box = document.getElementById('dup-box');
+    box.hidden = false;
+    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
+
+function submitAnyway() {
+  document.getElementById('confirm-dup').value = '1';
+  dupChecked = true;
+  document.getElementById('report-form').submit();
+}
+
+function alertBox(msg) {
+  let el = document.getElementById('form-alert');
+  const form = document.getElementById('report-form');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'form-alert'; el.className = 'flash-error';
+    form.querySelector('.tag-tree').before(el);
+  }
+  el.textContent = '⚠ ' + msg;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}

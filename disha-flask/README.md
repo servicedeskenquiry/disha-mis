@@ -27,6 +27,7 @@ Demo logins `admin / admin123` (Admin), `approver / approver123` (Approver) and 
 
 1. **SQL Editor** → run `supabase_schema.sql`, then `supabase_lockdown.sql`. They create `reports`, `app_users`, `app_settings`, Row Level Security with no open policies, and the `disha_restore()` function used by Backup & Restore.
    - Upgrading a database from before Phase 2: run `supabase_phase2.sql` once, **before** deploying the Phase 2 code. It is safe to run twice.
+   - Upgrading from before Phase 3: run `supabase_phase3.sql` once, **before** deploying the Phase 3 code (adds Block, GP, Village, source and tag paths).
    - If you ran the old v1 schema, uncomment the `DROP TABLE IF EXISTS reports;` line at the top first. The old table only held demo data.
 2. Optional: run `supabase_seed.sql` for demo reports.
 3. **Settings → API Keys → Legacy API Keys** → copy the `service_role` key (starts with `eyJ...`). `supabase==2.7.4` rejects the newer `sb_secret_...` keys.
@@ -57,6 +58,8 @@ Nightly backups: `.github/workflows/nightly-backup.yml` (in the repository root,
 
 ## Deploy on Render
 
+`gunicorn.conf.py` (2 workers × 4 threads, 120 s timeout) is picked up automatically by the start command `gunicorn app:app`. On the free plan the service sleeps after 15 minutes without visitors, so the first page after a pause takes up to a minute; the Starter plan avoids this.
+
 Add the variables from `.env.example` in the Render dashboard (Environment). Attachments go to Backblaze B2, or to Supabase Storage when B2 is not set. Without either they are saved to the local disk, which Render wipes on every deploy.
 
 ---
@@ -69,8 +72,9 @@ Everything the client may revise is in **`config.py`**:
 |---|---|
 | `DISTRICTS`, `HEAD_OFFICE` | The 15 active districts/units. Head Office is offered for periodic reports only |
 | `REPORT_TYPES` | Daily Activity, Monthly, Quarterly, Half-Yearly, Annual |
-| `ACTIVITY_TYPES` | 5 activity types + Others, each with the format/template fields that open when it is chosen. **Provisional** until the Fisheries Team shares their formats |
-| `ISSUE_TAGS` | **Provisional** list until the Fisheries Team shares theirs |
+| `ACTIVITY_TYPES` | The 10 activity types of the revised module + Others, each with the format fields that open when it is chosen (text, textarea, number, date, select). Formats are a **first draft** for the Fisheries Team to review |
+| `DEFAULT_ISSUE_TREE` | Starting Issue › Subject › Sub-subject list. After that the Admin edits it on **Admin › Settings**, no code change needed |
+| `SOURCE_CHANNELS` | WhatsApp, Email, Word document, PDF, Phone call, Field visit, Other |
 | `PARTICIPANT_CATEGORIES` | Women, Men, Fisher, Fish Workers, Fish Farmers, Leaders, Organisers, Experts, Others |
 | `QUARTERS`, `HALVES` | Indian financial year (Q1 = Apr–Jun, H1 = Apr–Sep) |
 | `MAX_ATTACHMENTS`, `MAX_FILE_MB` | 10 files per report, 25 MB each |
@@ -85,6 +89,7 @@ Bengali text lives in `static/js/i18n_bn.js`, keyed by the English text. Add a l
 ```
 app.py               Routes
 config.py            Master lists (districts, report types, activities, tags …)
+tags.py              Issue › Subject › Sub-subject list: parsing and paths
 store.py             Supabase / in-memory data access, file storage, users, backup data
 b2.py                Backblaze B2 storage (S3-compatible API)
 backup.py            Backup files: build, save to B2, list, prune, restore

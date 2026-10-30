@@ -88,9 +88,10 @@ def filter_reports(reports, rtype=None, status=None, district=None, tag=None,
             continue
         if ql:
             hay = " ".join(str(r.get(k) or "") for k in
-                           ("id", "district", "activity", "period", "location",
-                            "description", "remarks", "submitted_by")).lower()
-            hay += " " + " ".join(r.get("tags") or []).lower()
+                           ("id", "district", "block", "gp", "village", "activity",
+                            "period", "location", "source_channel", "description",
+                            "remarks", "submitted_by")).lower()
+            hay += " " + " ".join((r.get("tags") or []) + (r.get("tag_paths") or [])).lower()
             if ql not in hay:
                 continue
         out.append(r)

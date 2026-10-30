@@ -2,6 +2,7 @@ import hmac
 import io
 import logging
 import os
+import time
 from datetime import date, datetime
 from functools import wraps
 
@@ -21,6 +22,7 @@ import backup  # noqa: E402
 import config as C  # noqa: E402
 import exports  # noqa: E402
 import store  # noqa: E402
+import tags as T  # noqa: E402
 from store import StoreError  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
@@ -95,6 +97,17 @@ def settings():
     return g.settings
 
 
+def issue_tree():
+    """The Admin's Issue › Subject › Sub-subject list."""
+    if "issue_tree" not in g:
+        g.issue_tree = T.parse(settings().get("issue_tree") or C.DEFAULT_ISSUE_TREE)
+    return g.issue_tree
+
+
+def issue_tags():
+    return T.issues(issue_tree())
+
+
 def is_own(report):
     """Entered by the logged-in user (older reports only have a display name)."""
     if report.get("created_by"):
@@ -109,7 +122,7 @@ def can_view(report):
         districts = session.get("districts") or []
         return not districts or report.get("district") in districts
     if role() == C.BACK_OFFICE:
-        return is_own(report)
+        return is_own(report) or settings().get("backoffice_see_all", False)
     if is_guest():
         s = settings()
         return (report.get("status") == "Approved" and not report.get("guest_hidden")
@@ -129,7 +142,10 @@ def can_edit(report):
 
 
 def can_review(report):
-    return can_approve() and can_view(report) and report.get("status") != "Approved"
+    """Only reports waiting for a decision. After a query or rejection the
+    report goes back to Back Office, so nobody can approve it until it is
+    resubmitted (Admin can still correct it and tick "resubmit")."""
+    return can_approve() and can_view(report) and report.get("status") in C.REVIEW_STATUSES
 
 
 def login_required(view):
@@ -154,6 +170,9 @@ def staff_required(view):
     return wrapped
 
 
+USER_RECHECK_SECONDS = 60
+
+
 @app.before_request
 def refresh_session():
     """Apply Admin changes at once: a disabled account is logged out, and a
@@ -166,6 +185,9 @@ def refresh_session():
         return redirect(url_for("login"))
     if not is_staff():
         return
+    # Re-read the account at most once a minute: one database call less per page
+    if time.time() - session.get("user_checked", 0) < USER_RECHECK_SECONDS:
+        return
     try:
         user = store.get_user(session.get("username", ""))
     except StoreError:
@@ -175,7 +197,8 @@ def refresh_session():
         flash("Your account has been disabled or removed. Contact the Admin.", "error")
         return redirect(url_for("login"))
     session.update(role=user["role"], districts=user["districts"],
-                   display_name=user.get("full_name") or user["username"])
+                   display_name=user.get("full_name") or user["username"],
+                   user_checked=time.time())
 
 
 def all_reports():
@@ -219,6 +242,9 @@ def inject_globals():
             pass
     return {
         "C": C,
+        "T": T,
+        "issue_tree": issue_tree(),
+        "issue_tags": issue_tags(),
         "role": role(),
         "is_admin": is_admin(),
         "can_approve": can_approve(),
@@ -227,6 +253,7 @@ def inject_globals():
         "can_download": can_download(),
         "can_comment": can_comment(),
         "can_edit": can_edit,
+        "is_own": is_own,
         "can_review": can_review,
         "settings": settings(),
         "returned_count": returned,
@@ -323,7 +350,7 @@ def dashboard():
     stats = A.dashboard(reports)
     if role() == C.BACK_OFFICE:
         # Back Office: own reports that need an answer first
-        pending = [r for r in reports if r.get("status") in C.RETURNED_STATUSES][:8]
+        pending = [r for r in reports if is_own(r) and r.get("status") in C.RETURNED_STATUSES][:8]
     else:
         pending = [r for r in reports if r.get("status") in C.REVIEW_STATUSES][:8]
     return render_template("dashboard.html", stats=stats, pending=pending, tag=tag)
@@ -416,10 +443,21 @@ def parse_report_form(f, files, reports, existing=None):
     if total:
         participants["total"] = total
 
-    tags = [t for t in f.getlist("tags") if t in C.ISSUE_TAGS]
+    # Issue › Subject › Sub-subject: ticked paths; `tags` keeps the issues
+    tag_paths = T.clean_paths(f.getlist("tagpath"), issue_tree(),
+                              keep=(existing or {}).get("tag_paths") or [])
+    if not tag_paths:
+        errors.append("Please select at least one Issue tag.")
+    source = f.get("source_channel", "")
+    if source not in C.SOURCE_CHANNELS:
+        errors.append("Please select where the information came from (Source).")
+    place = {k: " ".join(f.get(k, "").split())[:120] for k in ("block", "gp", "village")}
+    if rtype == "daily" and district != C.HEAD_OFFICE and not place["block"]:
+        errors.append("Please enter the Block.")
     details = {fd["key"]: f.get(f"d_{fd['key']}", "").strip()
                for fd in C.ACTIVITY_FIELDS.get(activity, [])
-               if f.get(f"d_{fd['key']}", "").strip()}
+               if f.get(f"d_{fd['key']}", "").strip()
+               and (fd["type"] != "select" or f.get(f"d_{fd['key']}") in fd["options"])}
 
     # Attachments: two categories, max 10 including archive references
     uploads = []
@@ -452,7 +490,8 @@ def parse_report_form(f, files, reports, existing=None):
         "rtype": rtype, "district": district, "activity": activity,
         "period": period, "location": f.get("location", "").strip(),
         "participants": participants, "participants_total": participants.get("total", 0),
-        "tags": tags, "details": details,
+        "tags": T.issues_from_paths(tag_paths), "tag_paths": tag_paths,
+        "details": details, "source_channel": source, **place,
         "description": f.get("description", "").strip(),
         "remarks": f.get("remarks", "").strip(),
         "submitted_by": f.get("submitted_by", "").strip() or session.get("display_name"),
@@ -500,9 +539,45 @@ def comment_entry(text, kind="comment"):
     return c
 
 
+def place_suggestions():
+    """Blocks, GPs and villages typed before, per district, for the form's
+    suggestion lists. Uses every report so that spellings stay consistent."""
+    out = {}
+    for r in all_reports():
+        d = out.setdefault(r.get("district") or "", {"block": set(), "gp": set(), "village": set()})
+        for k in ("block", "gp", "village"):
+            if r.get(k):
+                d[k].add(r[k])
+    return {d: {k: sorted(v, key=str.lower) for k, v in lv.items()} for d, lv in out.items()}
+
+
+def find_duplicates(fields, exclude_id=None):
+    """Reports that look like the same entry: same report type, district,
+    activity and date/period (and village, when both have one)."""
+    out = []
+    for r in all_reports():
+        if r["id"] == exclude_id:
+            continue
+        if any((r.get(k) or "") != (fields.get(k) or "")
+               for k in ("rtype", "district", "activity", "period")):
+            continue
+        v1, v2 = (r.get("village") or "").lower(), (fields.get("village") or "").lower()
+        if v1 and v2 and v1 != v2:
+            continue
+        out.append(r)
+    return out
+
+
+def duplicate_summary(dups):
+    return [{"id": r["id"], "district": r.get("district"), "activity": r.get("activity"),
+             "period": r.get("period"), "village": r.get("village") or "",
+             "submitted_by": r.get("submitted_by") or "",
+             "status": C.STATUS_LABEL.get(r.get("status"), r.get("status"))} for r in dups[:10]]
+
+
 def form_context(reports, **extra):
     return dict(archive=archive_files(reports), fys=A.available_fys(reports),
-                current_fy=A.current_fy(), **extra)
+                current_fy=A.current_fy(), places=place_suggestions(), **extra)
 
 
 @app.route("/submit", methods=["GET", "POST"])
@@ -511,15 +586,22 @@ def submit():
     if not can_enter():
         flash("Approvers review reports; data entry is done by Back Office or Admin.", "error")
         return redirect(url_for("dashboard"))
-    reports = load_reports()
     if request.method == "GET":
         return render_template("submit.html", report=None,
-                               **form_context(reports, preset=request.args.get("rtype", "")))
+                               **form_context(load_reports(), preset=request.args.get("rtype", "")))
 
+    # The full report list is only needed to re-use files from earlier reports
+    reports = load_reports() if request.form.get("archive_ref") else []
     fields, uploads, errors = parse_report_form(request.form, request.files, reports)
     if errors:
         for e in errors:
             flash(e, "error")
+        return redirect(url_for("submit", rtype=fields["rtype"]))
+    dups = find_duplicates(fields)
+    if dups and request.form.get("confirm_duplicate") != "1":
+        flash("This looks like a report that was already entered: "
+              + ", ".join(f"#{r['id']}" for r in dups[:5])
+              + ". Check it, and submit again only if it is a different activity.", "error")
         return redirect(url_for("submit", rtype=fields["rtype"]))
     try:
         fields["attachments"] = save_uploads(uploads)
@@ -533,7 +615,8 @@ def submit():
     return redirect(url_for("reports", rtype=fields["rtype"]))
 
 
-TRACKED_FIELDS = ["district", "activity", "period", "location", "participants", "tags",
+TRACKED_FIELDS = ["district", "block", "gp", "village", "source_channel", "activity",
+                  "period", "location", "participants", "tag_paths",
                   "details", "description", "remarks", "submitted_by", "attachments",
                   "archive_refs"]
 
@@ -557,10 +640,18 @@ def report_edit(report_id):
         for e in errors:
             flash(e, "error")
         return redirect(url_for("report_edit", report_id=report_id))
+    moved = any((fields.get(k) or "") != (r.get(k) or "")
+                for k in ("rtype", "district", "activity", "period", "village"))
+    dups = find_duplicates(fields, exclude_id=report_id) if moved else []
+    if dups and request.form.get("confirm_duplicate") != "1":
+        flash("After this change the report looks like one already entered: "
+              + ", ".join(f"#{d['id']}" for d in dups[:5])
+              + ". Check it, and save again only if it is a different activity.", "error")
+        return redirect(url_for("report_edit", report_id=report_id))
     note = request.form.get("change_note", "").strip()
     try:
         fields["attachments"] = fields["attachments"] + save_uploads(uploads)
-        changed = [k for k in TRACKED_FIELDS if fields.get(k) != r.get(k)]
+        changed = [k for k in TRACKED_FIELDS if (fields.get(k) or None) != (r.get(k) or None)]
         history = list(r.get("history") or [])
         comments = list(r.get("comments") or [])
         status = r.get("status")
@@ -687,8 +778,13 @@ def report_review(report_id):
     if not r:
         return redirect(url_for("approvals"))
     if not can_review(r):
-        flash("Only an Admin or Approver can review this report." if not can_approve()
-              else "This report is already approved and locked.", "error")
+        if not can_approve():
+            msg = "Only an Admin or Approver can review this report."
+        elif r.get("status") == "Approved":
+            msg = "This report is already approved and locked."
+        else:
+            msg = "This report is waiting for Back Office to answer and resubmit it."
+        flash(msg, "error")
         return redirect(nxt)
     status, label, kind, needs_text = REVIEW_ACTIONS[action]
     text = request.form.get("comment", "").strip()[:2000]
@@ -765,6 +861,7 @@ def approvals():
     view = request.args.get("view", "review")
     if role() == C.BACK_OFFICE:
         view = "returned"
+        all_r = [r for r in all_r if is_own(r)]
     wanted = C.REVIEW_STATUSES if view == "review" else C.RETURNED_STATUSES
     pool = [r for r in all_r if r.get("status") in wanted]
     data = A.filter_reports(pool, **filters)
@@ -784,12 +881,20 @@ def download_allowed():
     return False
 
 
+def downloadable_reports():
+    """Back Office downloads only its own reports, even when it may view all."""
+    reports = load_reports()
+    if role() == C.BACK_OFFICE:
+        reports = [r for r in reports if is_own(r)]
+    return reports
+
+
 @app.route("/export")
 @staff_required
 def export_page():
     if not download_allowed():
         return redirect(url_for("dashboard"))
-    all_r = load_reports()
+    all_r = downloadable_reports()
     filters = A.read_filters(request.args)
     count = len(A.filter_reports(all_r, **filters))
     return render_template("export.html", filters=filters, count=count,
@@ -803,7 +908,7 @@ def export_file(fmt):
         abort(404)
     if not download_allowed():
         return redirect(url_for("dashboard"))
-    all_r = load_reports()
+    all_r = downloadable_reports()
     ids = request.args.get("id")
     if ids:
         wanted = {int(i) for i in ids.split(",") if i.isdigit()}
@@ -946,6 +1051,17 @@ def settings_page():
     if not is_admin():
         flash("Only the Admin can change settings.", "error")
         return redirect(url_for("dashboard"))
+    if request.method == "POST" and request.form.get("form") == "issue_tree":
+        tree = T.parse(request.form.get("issue_tree", ""))
+        if not tree:
+            flash("The tag list cannot be empty.", "error")
+            return redirect(url_for("settings_page") + "#tags")
+        try:
+            store.save_settings({"issue_tree": T.to_text(tree)})
+            flash(f"Tag list saved: {len(tree)} issues, {len(T.all_paths(tree)) - len(tree)} subjects and sub-subjects.")
+        except StoreError as e:
+            flash(str(e), "error")
+        return redirect(url_for("settings_page") + "#tags")
     if request.method == "POST":
         f = request.form
         try:
@@ -958,6 +1074,7 @@ def settings_page():
                 "guest_can_comment": f.get("guest_can_comment") == "1",
                 "guest_see_attachments": f.get("guest_see_attachments") == "1",
                 "backoffice_can_download": f.get("backoffice_can_download") == "1",
+                "backoffice_see_all": f.get("backoffice_see_all") == "1",
             })
             flash("Settings saved.")
         except StoreError as e:
@@ -1132,6 +1249,23 @@ def cron_nightly():
 @login_required
 def api_reports():
     return jsonify(A.filter_reports(load_reports(), **A.read_filters(request.args)))
+
+
+@app.route("/api/check-duplicates", methods=["POST"])
+@staff_required
+def api_check_duplicates():
+    """Called by the form just before submitting (files are not sent)."""
+    f = request.form
+    rtype = f.get("rtype", "daily")
+    if rtype not in C.REPORT_TYPE_KEYS:
+        return jsonify([])
+    period, _extra, err = period_from_form(rtype, f)
+    if err:
+        return jsonify([])
+    fields = {"rtype": rtype, "district": f.get("district", ""), "activity": f.get("activity", ""),
+              "period": period, "village": " ".join(f.get("village", "").split())}
+    exclude = f.get("report_id", type=int)
+    return jsonify(duplicate_summary(find_duplicates(fields, exclude_id=exclude)))
 
 
 @app.errorhandler(413)

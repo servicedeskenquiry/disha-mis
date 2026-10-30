@@ -113,6 +113,10 @@ def _normalise(r):
     r.setdefault("history", [])
     r.setdefault("guest_hidden", False)
     r.setdefault("created_by", None)
+    for k in ("block", "gp", "village", "source_channel"):
+        r[k] = r.get(k) or ""
+    if not r.get("tag_paths"):
+        r["tag_paths"] = list(r.get("tags") or [])   # reports from before Phase 3
     for k in ("participants", "details"):
         if r.get(k) is None:
             r[k] = {}

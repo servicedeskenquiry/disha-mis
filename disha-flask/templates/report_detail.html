@@ -24,7 +24,7 @@
     <a href="{{ url_for('report_edit', report_id=report.id) }}" class="btn btn-primary btn-sm">✏️ <span data-t>{{ 'Answer and resubmit' if report.status in C.RETURNED_STATUSES and role == C.BACK_OFFICE else ('Correct (Admin override)' if report.status == 'Approved' else 'Edit') }}</span></a>
     {% endif %}
   </div>
-  {% if can_download %}
+  {% if can_download and (role != C.BACK_OFFICE or is_own(report)) %}
   <div class="export-btns">
     <span data-t>Download</span>:
     {% for fmt, label in [('docx','Word'),('pdf','PDF'),('xlsx','Excel'),('pptx','PPT')] %}
@@ -56,14 +56,20 @@
     <div class="meta-item"><div class="meta-label" data-t>Active District</div><div class="meta-value" data-t>{{ report.district }}</div></div>
     <div class="meta-item"><div class="meta-label" data-t>Type</div><div class="meta-value" data-t>{{ C.REPORT_TYPE_LABEL[report.rtype] }}</div></div>
     <div class="meta-item"><div class="meta-label" data-t>{{ 'Date' if report.rtype == 'daily' else 'Period' }}</div><div class="meta-value">{{ report.period }}</div></div>
-    <div class="meta-item"><div class="meta-label" data-t>Location / Venue</div><div class="meta-value">{{ report.location or '—' }}</div></div>
+    {% if report.block or report.gp or report.village %}
+    <div class="meta-item"><div class="meta-label" data-t>Block</div><div class="meta-value">{{ report.block or '—' }}</div></div>
+    <div class="meta-item"><div class="meta-label" data-t>Gram Panchayat (GP)</div><div class="meta-value">{{ report.gp or '—' }}</div></div>
+    <div class="meta-item"><div class="meta-label" data-t>Village</div><div class="meta-value">{{ report.village or '—' }}</div></div>
+    {% endif %}
+    <div class="meta-item"><div class="meta-label" data-t>Venue</div><div class="meta-value">{{ report.location or '—' }}</div></div>
+    {% if report.source_channel %}<div class="meta-item"><div class="meta-label" data-t>Source</div><div class="meta-value" data-t>{{ report.source_channel }}</div></div>{% endif %}
     <div class="meta-item"><div class="meta-label" data-t>Submitted by</div><div class="meta-value">{{ report.submitted_by }}</div></div>
     <div class="meta-item"><div class="meta-label" data-t>Submitted</div><div class="meta-value">{{ report.created_at|dt }}</div></div>
   </div>
 
-  {% if report.tags %}
-  <div class="sec-div" data-t>🏷️ Issue Tags</div>
-  <div style="margin-bottom:12px">{% for t in report.tags %}<a class="tag" href="{{ url_for('reports', tag=t) }}" data-t>{{ t }}</a>{% endfor %}</div>
+  {% if report.tag_paths or report.tags %}
+  <div class="sec-div" data-t>🏷️ Issue › Subject › Sub-subject</div>
+  <div style="margin-bottom:12px">{% for p in T.leaf_paths(report.tag_paths or report.tags) %}<a class="tag tag-path" href="{{ url_for('reports', tag=T.issue_of(p)) }}">{% for part in p.split(T.SEP) %}{% if not loop.first %} › {% endif %}<span data-t>{{ part }}</span>{% endfor %}</a>{% endfor %}</div>
   {% endif %}
 
   {% if report.participants %}
@@ -144,7 +150,6 @@
     </form>
     {% endif %}
   {% elif can_review(report) %}
-    {% if report.status in C.RETURNED_STATUSES %}<div class="empty" style="padding:0 0 6px" data-t>Waiting for Back Office to respond.</div>{% endif %}
     <form method="POST" action="{{ url_for('report_review', report_id=report.id) }}" class="review-box">
       <textarea name="comment" placeholder="Comment, query or reason for rejection (required for Query and Reject)" data-tp></textarea>
       <div class="review-btns">

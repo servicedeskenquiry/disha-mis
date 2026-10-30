@@ -381,3 +381,19 @@ a.fp{text-decoration:none;color:inherit}
 .district-pick .check-grid{grid-template-columns:repeat(2,minmax(150px,1fr));background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px;margin-top:6px}
 .keep-files{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;font-size:13px}
 .keep-files label{display:flex;gap:8px;align-items:center}
+
+/* Phase 3: Block / GP / Village, issue tree, duplicate warning */
+.place-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.place-row .full-row{grid-column:1/-1;margin:-4px 0 0}
+.place-row input{width:100%}
+@media (max-width:700px){.place-row{grid-template-columns:1fr}}
+.tag-tree{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.tt-issue>.tt-children,.tt-subject>.tt-children{display:none}
+.tt-issue.open>.tt-children,.tt-subject.open>.tt-children{display:flex}
+.tt-children{flex-direction:column;gap:4px;margin:6px 0 4px 26px;padding-left:12px;border-left:2px solid var(--border);font-size:13px}
+.tt-children label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.tt-subject>.tt-children{margin-left:20px}
+.tag-path{display:inline-block;margin:0 6px 6px 0}
+.dup-box{border:1px solid #f0c36d;background:#fff8e6;border-radius:10px;padding:12px;margin:14px 0;font-size:13px}
+.dup-box ul{margin:6px 0 0 18px}
+.tree-editor{width:100%;min-height:320px;font-family:ui-monospace,Consolas,monospace;font-size:13px;border:1px solid var(--border);border-radius:7px;padding:10px}

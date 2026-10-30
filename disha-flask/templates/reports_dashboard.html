@@ -16,7 +16,7 @@
   <label for="rd-tag" data-t>Issue Tag</label>
   <select name="tag" id="rd-tag" onchange="this.form.submit()">
     <option value="" data-t>All tags</option>
-    {% for t in C.ISSUE_TAGS %}<option value="{{ t }}" {% if filters.get('tag') == t %}selected{% endif %} data-t>{{ t }}</option>{% endfor %}
+    {% for t in issue_tags %}<option value="{{ t }}" {% if filters.get('tag') == t %}selected{% endif %} data-t>{{ t }}</option>{% endfor %}
   </select>
 </form>
 

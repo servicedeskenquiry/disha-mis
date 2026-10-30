@@ -93,6 +93,23 @@
           </select>
         </div>
 
+        <div class="fg2 full place-row">
+          <div>
+            <label for="f-block"><span data-t>Block</span> <span class="daily-req">*</span></label>
+            <input type="text" name="block" id="f-block" list="dl-block" maxlength="120" autocomplete="off" value="{{ R.get('block') or '' }}">
+          </div>
+          <div>
+            <label for="f-gp" data-t>Gram Panchayat (GP)</label>
+            <input type="text" name="gp" id="f-gp" list="dl-gp" maxlength="120" autocomplete="off" value="{{ R.get('gp') or '' }}">
+          </div>
+          <div>
+            <label for="f-village" data-t>Village</label>
+            <input type="text" name="village" id="f-village" list="dl-village" maxlength="120" autocomplete="off" value="{{ R.get('village') or '' }}">
+          </div>
+          <datalist id="dl-block"></datalist><datalist id="dl-gp"></datalist><datalist id="dl-village"></datalist>
+          <div class="hint full-row" data-t>Type the name, or pick one used before in this district so the spelling stays the same.</div>
+        </div>
+
         <!-- Date (Daily) / Period (periodic reports) -->
         <div class="fg2 period-group" data-for="daily">
           <label for="f-date"><span data-t>Date</span> *</label>
@@ -127,8 +144,15 @@
         </div>
 
         <div class="fg2">
-          <label for="f-loc" data-t>Location / Venue</label>
-          <input type="text" name="location" id="f-loc" placeholder="Village, Block" data-tp value="{{ R.get('location') or '' }}">
+          <label for="f-loc" data-t>Venue</label>
+          <input type="text" name="location" id="f-loc" placeholder="e.g. Panchayat office, school ground" data-tp value="{{ R.get('location') or '' }}">
+        </div>
+        <div class="fg2">
+          <label for="f-source"><span data-t>Source (how the report reached the office)</span> *</label>
+          <select name="source_channel" id="f-source" required>
+            <option value="" data-t>-- Select --</option>
+            {% for s in C.SOURCE_CHANNELS %}<option value="{{ s }}" {% if R.get('source_channel') == s %}selected{% endif %} data-t>{{ s }}</option>{% endfor %}
+          </select>
         </div>
       </div>
 
@@ -143,6 +167,13 @@
               <label data-t>{{ fd.label }}</label>
               {% if fd.type == 'textarea' %}
                 <textarea name="d_{{ fd.key }}" style="min-height:60px">{{ D.get(fd.key, '') if R.get('activity') == name else '' }}</textarea>
+              {% elif fd.type == 'select' %}
+                <select name="d_{{ fd.key }}">
+                  <option value="" data-t>-- Select --</option>
+                  {% for o in fd.options %}<option value="{{ o }}" {% if R.get('activity') == name and D.get(fd.key) == o %}selected{% endif %} data-t>{{ o }}</option>{% endfor %}
+                </select>
+              {% elif fd.type == 'date' %}
+                <input type="date" name="d_{{ fd.key }}" value="{{ D.get(fd.key, '') if R.get('activity') == name else '' }}">
               {% else %}
                 <input type="{{ 'number' if fd.type == 'number' else 'text' }}" name="d_{{ fd.key }}" {% if fd.type == 'number' %}min="0"{% endif %} value="{{ D.get(fd.key, '') if R.get('activity') == name else '' }}">
               {% endif %}
@@ -154,10 +185,35 @@
       </div>
 
       <!-- Issue tags -->
-      <div class="sec-div" data-t>🏷️ Issue Tags</div>
-      <div class="chip-group">
-        {% for t in C.ISSUE_TAGS %}
-        <label class="chip"><input type="checkbox" name="tags" value="{{ t }}" {% if t in (R.get('tags') or []) %}checked{% endif %}><span data-t>{{ t }}</span></label>
+      <div class="sec-div"><span data-t>🏷️ Issue › Subject › Sub-subject</span> *</div>
+      <div class="hint" style="margin-top:-4px" data-t>Tick the issue. Its subjects open below it; tick the ones that apply.</div>
+      {% set chosen = R.get('tag_paths') or R.get('tags') or [] %}
+      <div class="tag-tree">
+        {% for issue in issue_tree %}
+        <div class="tt-issue">
+          <label class="chip"><input type="checkbox" name="tagpath" value="{{ issue.name }}" {% if issue.name in chosen %}checked{% endif %} onchange="tagToggle(this)"><span data-t>{{ issue.name }}</span></label>
+          {% if issue.subjects %}
+          <div class="tt-children">
+            {% for s in issue.subjects %}
+            {% set sp = issue.name ~ T.SEP ~ s.name %}
+            <div class="tt-subject">
+              <label><input type="checkbox" name="tagpath" value="{{ sp }}" {% if sp in chosen %}checked{% endif %} onchange="tagToggle(this)"> <span data-t>{{ s.name }}</span></label>
+              {% if s.subs %}
+              <div class="tt-children">
+                {% for sub in s.subs %}{% set ssp = sp ~ T.SEP ~ sub %}
+                <label><input type="checkbox" name="tagpath" value="{{ ssp }}" {% if ssp in chosen %}checked{% endif %} onchange="tagToggle(this)"> <span data-t>{{ sub }}</span></label>
+                {% endfor %}
+              </div>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+        {% set known = T.all_paths(issue_tree) %}
+        {% for p in chosen if p not in known %}
+        <div class="tt-issue"><label class="chip"><input type="checkbox" name="tagpath" value="{{ p }}" checked><span>{{ p }}</span></label> <small class="muted" data-t>(no longer in the list)</small></div>
         {% endfor %}
       </div>
 
@@ -251,6 +307,16 @@
       <label class="setting-row" style="border:none"><input type="checkbox" name="resubmit" value="1" checked> <span data-t>Mark as Resubmitted (send back to the Approver)</span></label>
       {% endif %}
       {% endif %}
+      <input type="hidden" name="confirm_duplicate" id="confirm-dup" value="">
+      <div class="dup-box" id="dup-box" hidden>
+        <strong data-t>⚠ This may already be entered</strong>
+        <div data-t>These reports have the same district, activity type and date/period:</div>
+        <ul id="dup-list"></ul>
+        <div class="btn-group" style="margin-top:6px">
+          <button type="button" class="btn btn-primary btn-sm" onclick="submitAnyway()" data-t>It is a different activity, submit anyway</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('dup-box').hidden = true" data-t>Go back and check</button>
+        </div>
+      </div>
       <div class="btn-group">
         {% if report %}
         <button type="submit" class="btn btn-primary">{{ '📤' }} <span data-t>{{ 'Resubmit for Approval' if report.status in C.RETURNED_STATUSES else 'Save Changes' }}</span></button>
@@ -269,6 +335,9 @@
 const MAX_ATTACH = {{ C.MAX_ATTACHMENTS }};
 const MAX_FILE_MB = {{ C.MAX_FILE_MB }};
 const TYPE_META = {{ C.REPORT_TYPES|tojson }};
+const PLACES = {{ places|tojson }};
+const DUP_URL = {{ url_for('api_check_duplicates')|tojson }};
+const REPORT_ID = {{ (report.id if report else none)|tojson }};
 document.addEventListener('DOMContentLoaded', () => {
   const preset = {{ preset|tojson }};
   if (preset) {
@@ -276,6 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (card) selectType(preset, card, true);
   }
   updateAttachCount();
+  initReportForm();
 });
 </script>
 {% endblock %}

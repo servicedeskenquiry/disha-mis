@@ -1,3 +1,25 @@
+# Phase 3: data entry (revised module sections 2–4, 30.10.2026)
+
+Run `supabase_phase3.sql` in the Supabase SQL Editor **before** uploading this code.
+
+| Item | Status | Where |
+|---|---|---|
+| 10 activity types from the module (+ Others), each with its own format; drop-down fields where the answer is a fixed choice | 🟡 formats are a first draft for the Fisheries Team | `config.ACTIVITY_TYPES` |
+| Block, Gram Panchayat and Village on every report; Block required for Daily reports of a district; suggestions from names used before in the district | 🟡 no official Block/GP/Village list yet | submit form |
+| Source of the information: WhatsApp, Email, Word, PDF, phone, field visit, other (required) | ✅ | `config.SOURCE_CHANNELS` |
+| 3-level Issue › Subject › Sub-subject tags; at least one required; Admin edits the list on the Settings page | 🟡 starting list is provisional | `tags.py`, Admin › Settings |
+| Duplicate check: same report type, district, activity and date/period (and village) warns before submitting; can be overridden | ✅ | `/api/check-duplicates`, `find_duplicates` |
+| Search also covers Block, GP, Village, source and subjects; exports show the place and the subject paths | ✅ | `analytics.filter_reports`, `exports.py` |
+| Older reports keep working: their issue tags become their tag paths | ✅ | `supabase_phase3.sql`, `store._normalise` |
+
+# Phase 2.1: fixes after testing (30.10.2026)
+
+| Item | Where |
+|---|---|
+| A rejected or queried report can no longer be approved until Back Office resubmits it (Admin can still correct it and tick "resubmit") | `can_review` |
+| New setting "Back Office can see all reports" (read only, off by default). Downloads and edits stay limited to own reports | Admin › Settings |
+| Faster pages: account re-checked once a minute instead of on every page; submitting no longer reads every report; 2 workers × 4 threads | `refresh_session`, `submit`, `gunicorn.conf.py` |
+
 # Phase 2: roles, approval workflow and guest controls (revised module, 29.10.2026)
 
 Run `supabase_phase2.sql` in the Supabase SQL Editor **before** uploading this code.

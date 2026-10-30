@@ -36,7 +36,7 @@
         </a>
         {% endif %}
         <a class="nav-item {% if request.endpoint in ('reports', 'report_detail', 'reports_dashboard', 'report_edit') %}active{% endif %}" href="{{ url_for('reports_dashboard') }}">
-          <span class="nav-icon">📋</span><span data-t>{{ 'My Reports' if role == C.BACK_OFFICE else 'All Reports' }}</span>
+          <span class="nav-icon">📋</span><span data-t>{{ 'My Reports' if role == C.BACK_OFFICE and not settings.backoffice_see_all else 'All Reports' }}</span>
         </a>
         {% if can_approve %}
         <a class="nav-item {% if request.endpoint == 'approvals' %}active{% endif %}" href="{{ url_for('approvals') }}">
